@@ -26,6 +26,10 @@ protected lemma mem_iff_comp_encode {f : α → β} :
 @[complexity] lemma tree_node : (tree.node ()) ∈ₑ C :=
 ⟨_, C.id, λ _, rfl⟩
 
+@[complexity] lemma unit_rec {f : α → unit} {g : α → β} (hg : g ∈ₑ C) :
+  @complexity_class.mem _ _ (α → β) _ _ _ (λ x : α, @punit.rec (λ _, β) (g x) (f x)) C := 
+by { convert hg, ext x, cases f x, refl, }
+
 private lemma eq_nil_aux : (=@tree.nil unit) ∈ₚ C :=
 ⟨_, C.ite' C.id (C.prop_const $ encode tt)
   (C.prop_const $ encode ff), λ x, by cases x; simp [has_uncurry.uncurry]⟩
@@ -64,6 +68,14 @@ end
 @[complexity] lemma eq_const {f : α → β} (hf : f ∈ₑ C) (y : β) :
   C.mem_pred (λ x, (f x) = y) :=
 by simpa using (eq_const_aux (encode y)).comp hf
+
+@[complexity] lemma tree_cases {f : α → tree unit} {g : α → β}
+  {h : α → unit → tree unit → tree unit → β} (hf : f ∈ₑ C) (hg : g ∈ₑ C) (hh : h ∈ₑ C) :
+  @complexity_class.mem α β (α → β) _ _ _ (λ x, @tree.cases_on unit (λ _, β) (f x) (g x) (h x)) C :=
+begin
+  complexity using (λ x, if f x = tree.nil then g x else h x () (f x).left (f x).right),
+  cases f x, { simp, }, cases ᾰ, simp,
+end
 
 lemma of_fin_cases [nonempty γ] (S : finset α)
   {f : α → β → γ} (hf : ∀ {x}, x ∈ S → f x ∈ₑ C) :
@@ -140,6 +152,22 @@ by { delta option.bind, clean_target, complexity, }
   C.mem (λ x, (f x).map (g x)) :=
 by { delta option.map, complexity, }
 
+def mem' {γ : Type} [has_uncurry γ α β] (f : γ) (C : complexity_class) : Prop :=
+C.prop (λ x, encode $ (decode α x).map ↿f)
+
+localized "infix ` ∈ₛ `:50 := complexity_class.mem'" in complexity_class
+
+lemma mem_of_mem' {γ : Type} [has_uncurry γ α β] {f : γ} {C : complexity_class}
+  (hf : f ∈ₛ C) : f ∈ₑ C := ⟨_, C.comp C.right hf, by simp [encode]⟩
+
+lemma mem'_iff_mem_decode {γ : Type} [has_uncurry γ α β] {f : γ} {C : complexity_class} (h : decode α ∈ₑ C) :
+  f ∈ₛ C ↔ f ∈ₑ C := ⟨mem_of_mem', λ H, by { dsimp only [mem'], complexity, }⟩ 
+
+protected lemma decode : decode (tree unit) ∈ₑ C := complexity_class.some 
+
+lemma option_decode (h : decode α ∈ₑ C) : decode (option α) ∈ₑ C :=
+by { simp only [decode], delta tencodable.to_option, clean_target, complexity, }
+
 end option
 
 section sum
@@ -172,8 +200,13 @@ end
 @[complexity] lemma sum_get_right : @sum.get_right α β ∈ₑ C :=
 by { delta sum.get_right, clean_target, complexity, }
 
+lemma sum_decode (h₁ : decode α ∈ₑ C) (h₂ : decode β ∈ₑ C) : decode (α ⊕ β) ∈ₑ C :=
+by { dsimp [decode], delta tencodable.to_sum, complexity, }
+
 end sum
 
+lemma prod_decode (h₁ : decode α ∈ₑ C) (h₂ : decode β ∈ₑ C) : decode (α × β) ∈ₑ C :=
+by { dsimp [decode], complexity, }
 
 end complexity_class
 

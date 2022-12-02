@@ -1,5 +1,6 @@
 import data.list.basic
 import data.polynomial.eval
+import data.mv_polynomial.basic
 import tree
 
 namespace list
@@ -45,4 +46,55 @@ begin
   { intros x y hxy, apply pow_le_pow_of_le_left (zero_le x) hxy, }, 
 end
 
+noncomputable def to_mv {R σ : Type*} [comm_semiring R] (x : σ) :
+  polynomial R →+* mv_polynomial σ R := polynomial.eval₂_ring_hom mv_polynomial.C (mv_polynomial.X x)
+
+@[simp] lemma to_mv_eval {R σ : Type*} [comm_semiring R] {x : σ} (p : polynomial R) (i : σ → R) :
+  mv_polynomial.eval i (to_mv x p) = p.eval (i x) :=
+by { rw [← coe_eval_ring_hom, to_mv, ← ring_hom.comp_apply], congr, ext; simp, }
+
 end polynomial
+
+namespace mv_polynomial
+variables {σ : Type*} {R : Type*} [comm_semiring R]
+
+noncomputable def to_polynomial (p : mv_polynomial σ R) : polynomial R :=
+p.eval₂ polynomial.C (λ _, polynomial.X)
+
+lemma to_polynomial_eval_eq_coe (p : mv_polynomial σ R) (x : R) :
+  p.to_polynomial.eval x = (polynomial.eval_ring_hom x).comp (mv_polynomial.eval₂_hom (@polynomial.C R _) (λ _, polynomial.X)) p :=
+rfl
+
+@[simp] lemma to_polynomial_eval_diag (p : mv_polynomial σ R) (x : R) :
+  mv_polynomial.eval (λ _ : σ, x) p = p.to_polynomial.eval x :=
+begin
+  rw to_polynomial_eval_eq_coe,
+  apply mv_polynomial.hom_eq_hom,
+  { ext y, simp, },
+  { intro n, simp, },
+end
+
+lemma eval_mono (p : mv_polynomial σ ℕ) : monotone (λ x : σ → ℕ, mv_polynomial.eval x p) :=
+begin
+  induction p using mv_polynomial.induction_on with n p q ih₁ ih₂ p x ih,
+  { simpa using monotone_const, },
+  { simp, apply monotone.add; assumption, },
+  simp, apply monotone.mul,
+  exacts [ih, function.monotone_eval _, λ _, zero_le', λ _, zero_le'],
+end
+
+lemma le_to_polynomial_of_le (p : mv_polynomial σ ℕ) (a : ℕ) (x : σ → ℕ)
+  (hx : ∀ i, x i ≤ a) : mv_polynomial.eval x p ≤ p.to_polynomial.eval a :=
+calc mv_polynomial.eval x p ≤ mv_polynomial.eval (λ _, a) p : p.eval_mono hx
+                      ...   = p.to_polynomial.eval a : p.to_polynomial_eval_diag a
+
+lemma le_to_polynomial_of_le_sum₂ (p : mv_polynomial (fin 2) ℕ) (x y : ℕ) :
+  mv_polynomial.eval ![x, y] p ≤ p.to_polynomial.eval (x + y) :=
+by { apply le_to_polynomial_of_le, simp [fin.forall_fin_two], }
+
+lemma to_polynomial_le_of_le (p : mv_polynomial σ ℕ) (a : ℕ) (x : σ → ℕ)
+  (hx : ∀ i, a ≤ x i) : p.to_polynomial.eval a ≤ mv_polynomial.eval x p :=
+calc p.to_polynomial.eval a = mv_polynomial.eval (λ _, a) p : (p.to_polynomial_eval_diag a).symm
+                        ... ≤ mv_polynomial.eval x p : p.eval_mono hx
+
+end mv_polynomial

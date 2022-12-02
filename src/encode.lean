@@ -165,6 +165,9 @@ instance _root_.nat.unary_tencodable : tencodable ℕ :=
 lemma encode_zero : encode 0 = nil := rfl
 lemma encode_succ (n : ℕ) : encode (n + 1) = nil △ (encode n) := rfl
 
+@[simp] lemma encode_num_nodes (n : ℕ) : (encode n).num_nodes = n :=
+by induction n; simp [*, encode_zero, encode_succ]
+
 end nat
 
 section option
