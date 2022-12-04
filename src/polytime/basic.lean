@@ -1,6 +1,7 @@
 import data.polynomial.eval
 import tactic.expand_exists
-import complexity_class.lemmas
+import complexity_class.stack_rec
+import polytime.size
 
 open tree tencodable function
 open_locale tree
@@ -101,16 +102,6 @@ attribute [complexity] polycodable.poly
 
 variables {α β : Type}
 
-lemma polycodable.decode_num_nodes_le (α : Type) [polycodable α] :
-  ∃ p : polynomial ℕ, ∀ x y, decode α x = some y → (encode y).num_nodes ≤ p.eval x.num_nodes :=
-begin
-  obtain ⟨p, hp⟩ := @tree.polytime.num_nodes_poly (λ x, encode (decode α x)) (by complexity),
-  use p, intros x y h,
-  specialize hp x,
-  simp only [h, encode, of_option, num_nodes, zero_add] at hp,
-  exact nat.le_of_succ_le hp,
-end
-
 instance : polycodable (tree unit) :=
 ⟨complexity_class.decode⟩
 
@@ -126,25 +117,8 @@ instance [polycodable α] [polycodable β] : polycodable (α × β) :=
 lemma polycodable.mem'_iff_mem [polycodable α] [tencodable β] {γ : Type} [has_uncurry γ α β] (f : γ) :
   f ∈ₛ P ↔ f ∈ₑ P := complexity_class.mem'_iff_mem_decode (polycodable.poly α) 
 
-class polysize (α : Type*) [tencodable α] :=
-(size : α → ℕ)
-(upper [] : ∃ p : polynomial ℕ, ∀ x, size x ≤ p.eval (encode x).num_nodes)
-(lower [] : ∃ p : polynomial ℕ, ∀ x, (encode x).num_nodes ≤ p.eval (size x))
-
-lemma polysize.decode_upper (α : Type) [polycodable α] [polysize α] :
-  ∃ p : polynomial ℕ, ∀ x y, decode α x = some y → polysize.size y ≤ p.eval x.num_nodes :=
-begin
-  obtain ⟨p, hp⟩ := polycodable.decode_num_nodes_le α,
-  obtain ⟨q, hq⟩ := polysize.upper α,
-  use q.comp p,
-  intros x y h,
-  rw [polynomial.eval_comp],
-  exact (hq _).trans (q.eval_mono $ hp _ _ h),
-end
-
 open polysize
 variables [tencodable α] [tencodable β]
-
 
 lemma polytime.size_le {γ : Type} [has_uncurry γ α β] [polysize α] [polysize β] {f : γ} (hf : f ∈ₑ P) :
   ∃ p : polynomial ℕ, ∀ x, size (↿f x) ≤ p.eval (size x) :=
@@ -158,64 +132,10 @@ begin
   exact u.eval_mono ((hp _).trans $ p.eval_mono (hl _)),
 end
 
-
-instance : inhabited (polysize α) :=
-⟨{ size := λ x, (encode x).num_nodes,
-  upper := ⟨polynomial.X, by simp⟩,
-  lower := ⟨polynomial.X, by simp⟩ }⟩
-
-@[simps]
-instance fintype.polysize [fintype α] : polysize α :=
-{ size := λ _, 0,
-  upper := ⟨0, λ x, zero_le'⟩,
-  lower := ⟨polynomial.C ((@finset.univ α _).sup (λ x, (encode x).num_nodes)), 
-    λ x, by { simp, exact finset.le_sup (finset.mem_univ x), }⟩ }
-
-instance [polysize α] [polysize β] : polysize (α × β) :=
-begin
-  refine_struct { size := λ x : α × β, size x.1 + size x.2 },
-  { cases upper α with p hp, cases upper β with q hq,
-    use p + q, rintro ⟨x₁, x₂⟩,
-    rw polynomial.eval_add,
-    refine add_le_add ((hp _).trans $ p.eval_mono _) ((hq _).trans $ q.eval_mono _);
-    simp [encode]; linarith only, },
-  cases lower α with p hp, cases lower β with q hq,
-  use p + q + 1, rintro ⟨x₁, x₂⟩,
-  simp only [encode, num_nodes, polynomial.eval_add, polynomial.eval_one, add_le_add_iff_right],
-  exact add_le_add ((hp _).trans $ p.eval_mono le_self_add)
-    ((hq _).trans $ q.eval_mono le_add_self),
-end
-
-@[simp] lemma polysize.prod_size [polysize α] [polysize β]
-  (x : α) (y : β) : size (x, y) = size x + size y := rfl
-
-instance : polysize ℕ := default
-instance : polysize (tree unit) := default
-
-@[simp] lemma polysize_unary_nat (n : ℕ) : size n = n :=
-by simp [polysize.size]
-
-@[simp] lemma polysize_tree_unit (x : tree unit) : size x = x.num_nodes := rfl
-
-def polysize_uniform [polysize α] [polysize β] (f : α → β → β) : Prop :=
-∃ (p : polynomial ℕ), ∀ x y, size (f x y) ≤ size y + p.eval (size x)
-
-theorem polysize_uniform.iterate [polysize α] [polysize β] {f : α → β → β} {n : α → ℕ}
-  (hf : polysize_uniform f) (hn : ∃ p : polynomial ℕ, ∀ x, n x ≤ p.eval (size x)) :
-    ∃ p : mv_polynomial (fin 2) ℕ, ∀ x y (m ≤ n x), size ((f x)^[m] y) ≤ mv_polynomial.eval ![size x, size y] p :=
-begin
-  cases hn with p hn, cases hf with q hf,
-  use (mv_polynomial.X 1 + (polynomial.to_mv 0 p) * (polynomial.to_mv 0 q) : mv_polynomial (fin 2) ℕ),
-  intros x y m hm, specialize hn x,
-  have : ∀ n : ℕ, size ((f x)^[n] y) ≤ size y + n * (q.eval $ size x),
-  { intro n, induction n with n ih, 
-    { simp, },
-    rw [iterate_succ_apply', nat.succ_mul, ← add_assoc],
-    refine (hf x _).trans _,
-    simpa using ih, },
-  refine (this $ m).trans _,
-  simp, mono, exacts [hm.trans hn, zero_le'],
-end
+lemma polycodable.decode_num_nodes_le (α : Type) [polycodable α] :
+  ∃ p : polynomial ℕ, ∀ x y, decode α x = some y → (encode y).num_nodes ≤ p.eval x.num_nodes :=
+let ⟨p, hp⟩ := @tree.polytime.num_nodes_poly (λ x, encode (decode α x)) (by complexity) in
+  ⟨p, λ x y h, nat.le_of_succ_le (by simpa [h, encode, of_option] using hp x)⟩
 
 namespace polytime
 
@@ -404,7 +324,6 @@ by rwa [tree.guard_size, if_pos]
 private lemma has_iterate_all (α : Type) [tencodable α] : has_iterate α :=
 begin
   rintros n f ⟨n', pn, hn⟩ ⟨f', pf, hf⟩ ⟨p, H⟩,
-  rw complexity_class.mem_iff_comp_encode,
   refine ⟨λ x, (λ s : tree unit, (f' s).guard_size (p.eval x.num_nodes))^[(n' x).num_nodes] x, _, λ x, _⟩,
   { rw [complexity_class.prop_iff_mem] at *, apply it₃ (iterate_aux (tree unit × tree unit)),
     complexity,
@@ -437,5 +356,11 @@ local attribute [-complexity] iterate_uniform'
 it₄ (has_iterate_all _) hn hf hg hp
 
 end iterate
+
+section stack_rec
+
+
+
+end stack_rec
 
 end polytime

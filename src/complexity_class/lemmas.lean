@@ -207,8 +207,37 @@ by { dsimp [decode], delta tencodable.to_sum, complexity, }
 
 end sum
 
+section prod
+
 lemma prod_decode (h₁ : decode α ∈ₑ C) (h₂ : decode β ∈ₑ C) : decode (α × β) ∈ₑ C :=
 by { dsimp [decode], complexity, }
+
+@[complexity] lemma prod_rec {f : α → β × γ} {g : α → β → γ → δ} (hf : f ∈ₑ C) (hg : g ∈ₑ C) :
+  @complexity_class.mem α δ (α → δ) _ _ _ (λ x, @prod.rec β γ (λ _, δ) (g x) (f x)) C :=
+by { complexity using (λ x, g x (f x).1 (f x).2), cases f x; refl, }
+
+end prod
+
+section list
+
+@[complexity] lemma list_cases {f : α → list β} {g : α → γ} {h : α → β → list β → γ} :
+  f ∈ₑ C → g ∈ₑ C → h ∈ₑ C →
+  @complexity_class.mem α γ (α → γ) _ _ _ (λ x, @list.cases_on β (λ _, γ) (f x) (g x) (h x)) C :=
+begin
+  rintros ⟨f', pf, hf⟩ ⟨g', pg, hg⟩ ⟨h', ph, hh⟩, replace hh := λ x₁ x₂ x₃, hh (x₁, x₂, x₃),
+  use λ x, if f' x = tree.nil then g' x else h' (encode (x, (f' x).left, (f' x).right)),
+  split, { complexity, },
+  intro x, simp only [hf, hg], dsimp [has_uncurry.uncurry, id],
+  cases f x, { simp [encode], }, { simpa [encode] using hh _ _ _, },
+end
+
+@[complexity] lemma head' : (@list.head' α) ∈ₑ C :=
+by { delta list.head', clean_target, complexity, }
+
+@[complexity] lemma tail : (@list.tail α) ∈ₑ C :=
+by { delta list.tail, clean_target, complexity, }
+
+end list
 
 end complexity_class
 
