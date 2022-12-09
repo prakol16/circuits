@@ -23,7 +23,9 @@ instance fintype.polysize [fintype α] : polysize α :=
   lower := ⟨polynomial.C ((@finset.univ α _).sup (λ x, (encode x).num_nodes)), 
     λ x, by { simp, exact finset.le_sup (finset.mem_univ x), }⟩ }
 
-instance [polysize α] [polysize β] : polysize (α × β) :=
+variables [polysize α] [polysize β] [polysize γ]
+
+instance : polysize (α × β) :=
 begin
   refine_struct { size := λ x : α × β, size x.1 + size x.2 },
   { cases upper α with p hp, cases upper β with q hq,
@@ -38,8 +40,7 @@ begin
     ((hq _).trans $ q.eval_mono le_add_self),
 end
 
-@[simp] lemma polysize.prod_size [polysize α] [polysize β]
-  (x : α) (y : β) : size (x, y) = size x + size y := rfl
+@[simp] lemma polysize.prod_size (x : α) (y : β) : size (x, y) = size x + size y := rfl
 
 instance : polysize ℕ := default
 instance : polysize (tree unit) := default
@@ -49,11 +50,11 @@ by simp [polysize.size]
 
 @[simp] lemma polysize_tree_unit (x : tree unit) : size x = x.num_nodes := rfl
 
-def polysize_uniform [polysize α] [polysize β] (f : α → β → β) : Prop :=
+def polysize_safe (f : α → β → γ) : Prop :=
 ∃ (p : polynomial ℕ), ∀ x y, size (f x y) ≤ size y + p.eval (size x)
 
-theorem polysize_uniform.iterate [polysize α] [polysize β] {f : α → β → β} {n : α → ℕ}
-  (hf : polysize_uniform f) (hn : ∃ p : polynomial ℕ, ∀ x, n x ≤ p.eval (size x)) :
+theorem polysize_safe.iterate {f : α → β → β} {n : α → ℕ}
+  (hf : polysize_safe f) (hn : ∃ p : polynomial ℕ, ∀ x, n x ≤ p.eval (size x)) :
     ∃ p : mv_polynomial (fin 2) ℕ, ∀ x y (m ≤ n x), size ((f x)^[m] y) ≤ mv_polynomial.eval ![size x, size y] p :=
 begin
   cases hn with p hn, cases hf with q hf,

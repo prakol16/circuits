@@ -146,21 +146,15 @@ section iterate
   
   One issue that comes up is that our iteration `tree.polytime.prec` requires the
   function to run in polynomial time on *all* inputs, whereas in general, iterating
-  some `f : α → α` should only require that `f` runs in polynomial time on valid encodings
-  of `α`.
+  some `f : α → α` with preprocessing on `g` should only require that `f` runs in polynomial time on valid encodings
+  of `α` which are in the range of `g`.
   
-  We therefore extract this property, `has_iterate`, which states that we can do iteration when
-  the internal state is `α`. We will show that in fact `has_iterate` is always true. This is
+  We therefore extract this property, `it`, which states that we can do iteration when
+  the internal state is `α` and preprocessing is `g`. We will show that in fact `it` is always true. This is
   because we can always check the size of the current state as we are running, and if it is too big,
   or if we've taken too many steps, we simply stop and output a garbage value (since the input must not have
-  been a valid encoding). But in order to prove this, we will need the ability to do some iteration (e.g. comparing nat's,
+  been valid). But in order to prove this, we will need the ability to do some iteration (e.g. comparing nat's,
   computing tree sizes). Thus, we have a bit of a chicken-egg problem, which is the purpose of having this definition. -/
--- private def has_iterate (α : Type) [tencodable α] : Prop :=
--- ∀ (n : α → tree unit) (f : α → α) (hn : n ∈ₑ P) (hf : f ∈ₑ P)
---   (H : ∃ p : polynomial ℕ, ∀ x (m ≤ (n x).num_nodes), (encode (f^[m] x)).num_nodes ≤ p.eval (encode x).num_nodes),
---   polytime.mem (λ x, f^[(n x).num_nodes] x)
-
-/-- Here, we allow the input to the iteration to pass through a preprocessing stage `g` first -/
 private def it (strict : bool) (α β : Type) [tencodable α] [tencodable β] : Prop :=
 ∀ (n : α → tree unit) (f : α → α) (g : β → α) 
   (hn : n ∈ₑ P) (hf : f ∈ₑ P) (hg : g ∈ₑ P)
@@ -201,7 +195,7 @@ end
 
 variables [polysize α] [polysize β] {strict : bool}
 
-/-- Similar to the basic `has_iterate` property, but we use `size` instead of `(encode x).num_nodes` -/
+/-- Similar to the basic `it` property, but we use `size` instead of `(encode x).num_nodes` -/
 private lemma it₁ (hiter : it strict α β) 
   (n : α → tree unit) (f : α → α) (g : β → α) 
   (hn : n ∈ₑ P) (hf : f ∈ₑ P) (hg : g ∈ₑ P)
@@ -243,19 +237,18 @@ by have := it₂ hiter (complexity_class.encode.comp hn) hf hg _; simpa
 /-- The condition on `f` is a "local" condition, rather than one involving the iteration of `f` -/
 private lemma it₄ (hiter : it strict (α × β) α) {n : α → ℕ}
   {f : α → β → β} {g : α → β} (hn : n ∈ₑ P) (hf : f ∈ₑ P) (hg : g ∈ₑ P) 
-  (hp : polysize_uniform f) : polytime.mem (λ x, (f x)^[n x] (g x)) :=
+  (hp : polysize_safe f) : polytime.mem (λ x, (f x)^[n x] (g x)) :=
 let ⟨p, H⟩ := hp.iterate (by simpa using polytime.size_le hn) in
   it₃ hiter hn hf hg ⟨p, λ x m hm y _, H x y m hm⟩
 
 /-- We extract `it₄` on the case of polycodable states so that we can mark
   it to be used by automation in this section. -/
-theorem iterate_uniform' {α β : Type} [polycodable α] [polycodable β] [polysize α] [polysize β]
+theorem iterate_safe' {α β : Type} [polycodable α] [polycodable β] [polysize α] [polysize β]
   {n : α → ℕ} {f : α → β → β} {g : α → β} (hn : n ∈ₑ P) (hf : f ∈ₑ P) (hg : g ∈ₑ P) 
-  (hp : polysize_uniform f) : polytime.mem (λ x, (f x)^[n x] (g x)) :=
+  (hp : polysize_safe f) : polytime.mem (λ x, (f x)^[n x] (g x)) :=
 it₄ (it_of_polycodable (α × β)) hn hf hg hp
 
-
-local attribute [complexity] iterate_uniform'
+local attribute [complexity] iterate_safe'
 
 lemma nil_node_iterate (n : ℕ) (y : tree unit) : ((λ x, tree.nil △ x)^[n] y).num_nodes = y.num_nodes + n :=
 by { induction n; simp [function.iterate_succ', *], refl, }
@@ -310,7 +303,10 @@ by { complexity using (λ x y, nat.pred^[y] x), { use 0, simpa using nat.pred_le
 @[complexity] lemma nat_le : polytime.mem_pred ((≤) : ℕ → ℕ → Prop) :=
 by { complexity using (λ x y, x - y = 0), rw tsub_eq_zero_iff_le, }
 
-/- We now prove that `has_iterate` is unconditionally true. The crucial ingredients are:
+lemma nat_lt : polytime.mem_pred ((<) : ℕ → ℕ → Prop) :=
+by { complexity using (λ x y, x ≤ y ∧ ¬(y ≤ x)), rw lt_iff_le_not_le, }
+
+/- We now prove that `it` is unconditionally true. The crucial ingredients are:
   - We can evaluate polynomials in polynomial time
   - We can prove `tree.guard_size`, which is the identity on trees
     whose size is less than `n` but otherwise returns a constant garbage value (`nil`),
@@ -332,7 +328,7 @@ by { simp only [tree.guard_size], split_ifs, { assumption, }, exact zero_le', }
 lemma tree.guard_size_pos (x : tree unit) {n} (h : x.num_nodes ≤ n) : x.guard_size n = x :=
 by rwa [tree.guard_size, if_pos]
 
-private lemma has_iterate_all (α β : Type) [tencodable α] [tencodable β] : it tt α β :=
+private lemma it_all (α β : Type) [tencodable α] [tencodable β] : it tt α β :=
 begin
   rintros n f g ⟨n', pn, hn⟩ ⟨f', pf, hf⟩ ⟨g', pg, hg⟩ ⟨p, H⟩,
   refine ⟨λ x, (λ s : tree unit, (f' s).guard_size (p.eval (g' x).num_nodes))^[(n' (g' x)).num_nodes] (g' x), _, λ x, _⟩,
@@ -361,13 +357,13 @@ theorem iterate {n : α → ℕ} {f : α → β → β} {g : α → β} (hn : n 
   (hf : f ∈ₑ P) (hg : g ∈ₑ P) :
   (∃ p : polynomial ℕ, ∀ x (m ≤ n x), size ((f x)^[m] (g x)) ≤ p.eval (size x)) →
   polytime.mem (λ x, (f x)^[n x] (g x))
-| ⟨p, hp⟩ := it₃ (has_iterate_all _ _) hn hf hg ⟨polynomial.to_mv 0 p, by simpa using hp⟩
+| ⟨p, hp⟩ := it₃ (it_all _ _) hn hf hg ⟨polynomial.to_mv 0 p, by simpa using hp⟩
 
-local attribute [-complexity] iterate_uniform'
+local attribute [-complexity] iterate_safe'
 
-@[complexity] theorem iterate_uniform {n : α → ℕ} {f : α → β → β} {g : α → β} (hn : n ∈ₑ P)
-  (hf : f ∈ₑ P) (hg : g ∈ₑ P) (hp : polysize_uniform f) : polytime.mem (λ x, (f x)^[n x] (g x)) :=
-it₄ (has_iterate_all _ _) hn hf hg hp
+@[complexity] theorem iterate_safe {n : α → ℕ} {f : α → β → β} {g : α → β} (hn : n ∈ₑ P)
+  (hf : f ∈ₑ P) (hg : g ∈ₑ P) (hp : polysize_safe f) : polytime.mem (λ x, (f x)^[n x] (g x)) :=
+it₄ (it_all _ _) hn hf hg hp
 
 end iterate
 
@@ -378,9 +374,3 @@ section stack_rec
 end stack_rec
 
 end polytime
-
--- example (p q : Prop) (hp : ¬p) : p → q := by library_search
-
--- example : ¬(ff : Prop) := bool.not_ff
-
--- #check not.elim

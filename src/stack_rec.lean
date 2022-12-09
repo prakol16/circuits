@@ -42,7 +42,7 @@ open_locale tree
 variables {α : Type} {β : Type} (base : α → β) (pre₁ pre₂ : tree unit → tree unit → α → α)
   (post : β → β → tree unit → tree unit → α → β)
 
-/-- Recursion with an explicit stack for `unit_tree` -/
+/-- Recursion with an explicit stack for `tree unit` -/
 @[simp]
 def stack_rec : tree unit → α → β
 | nil d := base d
@@ -117,3 +117,5 @@ variables {α β : Type} (base : α → β) (pre : ℕ → α → α) (post : β
 | (n+1) x := post (stack_rec n (pre n x)) n x
 
 end nat
+
+
