@@ -68,24 +68,3 @@ begin
   refine (this $ m).trans _,
   simp, mono, exacts [hm.trans hn, zero_le'],
 end
-
-def polysize_uniform' {β : α → Type*} [∀ x, tencodable (β x)] [polysize α] [∀ x, polysize (β x)] [polysize γ]
-  (f : ∀ x, β x → γ) : Prop :=
-∃ (p : polynomial ℕ), ∀ x y, size (f x y) ≤ size y + p.eval (size x)
-
-theorem polysize_uniform'.iterate [polysize α] [polysize β] {f : α → β → β} {n : α → ℕ}
-  (hf : polysize_uniform' f) (hn : ∃ p : polynomial ℕ, ∀ x, n x ≤ p.eval (size x)) :
-    ∃ p : mv_polynomial (fin 2) ℕ, ∀ x y (m ≤ n x), size ((f x)^[m] y) ≤ mv_polynomial.eval ![size x, size y] p :=
-begin
-  cases hn with p hn, cases hf with q hf,
-  use (mv_polynomial.X 1 + (polynomial.to_mv 0 p) * (polynomial.to_mv 0 q) : mv_polynomial (fin 2) ℕ),
-  intros x y m hm, specialize hn x,
-  have : ∀ n : ℕ, size ((f x)^[n] y) ≤ size y + n * (q.eval $ size x),
-  { intro n, induction n with n ih, 
-    { simp, },
-    rw [iterate_succ_apply', nat.succ_mul, ← add_assoc],
-    refine (hf x _).trans _,
-    simpa using ih, },
-  refine (this $ m).trans _,
-  simp, mono, exacts [hm.trans hn, zero_le'],
-end

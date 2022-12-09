@@ -155,17 +155,25 @@ section iterate
   or if we've taken too many steps, we simply stop and output a garbage value (since the input must not have
   been a valid encoding). But in order to prove this, we will need the ability to do some iteration (e.g. comparing nat's,
   computing tree sizes). Thus, we have a bit of a chicken-egg problem, which is the purpose of having this definition. -/
-private def has_iterate (α : Type) [tencodable α] : Prop :=
-∀ (n : α → tree unit) (f : α → α) (hn : n ∈ₑ P) (hf : f ∈ₑ P)
-  (H : ∃ p : polynomial ℕ, ∀ x (m ≤ (n x).num_nodes), (encode (f^[m] x)).num_nodes ≤ p.eval (encode x).num_nodes),
-  polytime.mem (λ x, f^[(n x).num_nodes] x)
+-- private def has_iterate (α : Type) [tencodable α] : Prop :=
+-- ∀ (n : α → tree unit) (f : α → α) (hn : n ∈ₑ P) (hf : f ∈ₑ P)
+--   (H : ∃ p : polynomial ℕ, ∀ x (m ≤ (n x).num_nodes), (encode (f^[m] x)).num_nodes ≤ p.eval (encode x).num_nodes),
+--   polytime.mem (λ x, f^[(n x).num_nodes] x)
+
+/-- Here, we allow the input to the iteration to pass through a preprocessing stage `g` first -/
+private def it (strict : bool) (α β : Type) [tencodable α] [tencodable β] : Prop :=
+∀ (n : α → tree unit) (f : α → α) (g : β → α) 
+  (hn : n ∈ₑ P) (hf : f ∈ₑ P) (hg : g ∈ₑ P)
+  (H : ∃ p : polynomial ℕ, ∀ x (m ≤ (n x).num_nodes), (strict → x ∈ set.range g) → (encode (f^[m] x)).num_nodes ≤ p.eval (encode x).num_nodes),
+  polytime.mem (λ x, f^[(n (g x)).num_nodes] (g x))
 
 /-- As a first step, we show that all `polycodable` types can be iterated on. 
   We can do this by explicitly decoding and encoding at each step, so that weird things
   (which may take longer than polynomial time) do not happen on invalid inputs. -/
-private lemma iterate_aux (α : Type) [polycodable α] : has_iterate α :=
+private lemma it_of_polycodable (α : Type) [polycodable α] : it ff α β :=
 begin
-  rintros n f hn hf ⟨p, H⟩,
+  rintros n f g hn hf hg ⟨p, H⟩,
+  refine (_ : polytime.mem (λ x, f^[(n x).num_nodes] x)).comp hg, clear hg,
   -- TODO: Extract into definition (maybe?)
   -- A version of f and n which fail "safely" (i.e. if you input something that
   --  decodes to `none`, the output is `nil`)
@@ -188,61 +196,64 @@ begin
   cases m, { simp, },
   cases hd : decode α x with y, { exfalso, simpa [H₂ x hd] using hm, },
   simp only [H₄ _ _ m hd, (H₁ _ _ hd).2, polynomial.eval_add, polynomial.eval_X, polynomial.eval_comp] at ⊢ hm,
-  exact le_add_left ((H _ _ hm).trans $ p.eval_mono $ hu _ _ hd),
+  exact le_add_left ((H _ _ hm bool.not_ff.elim).trans $ p.eval_mono $ hu _ _ hd),
 end
 
-variables [polysize α] [polysize β]
+variables [polysize α] [polysize β] {strict : bool}
 
 /-- Similar to the basic `has_iterate` property, but we use `size` instead of `(encode x).num_nodes` -/
-private lemma it₁ (hiter : has_iterate α) (n : α → tree unit) (f : α → α) (hn : n ∈ₑ P) (hf : f ∈ₑ P)
-  (H : ∃ p : polynomial ℕ, ∀ x (m ≤ (n x).num_nodes), (size (f^[m] x)) ≤ p.eval (size x)) :
-  polytime.mem (λ x, f^[(n x).num_nodes] x) :=
+private lemma it₁ (hiter : it strict α β) 
+  (n : α → tree unit) (f : α → α) (g : β → α) 
+  (hn : n ∈ₑ P) (hf : f ∈ₑ P) (hg : g ∈ₑ P)
+  (H : ∃ p : polynomial ℕ, ∀ x (m ≤ (n x).num_nodes), (strict → x ∈ set.range g) → size (f^[m] x) ≤ p.eval (size x)) :
+  polytime.mem (λ x, f^[(n (g x)).num_nodes] (g x)) :=
 begin
-  apply hiter n f hn hf,
+  apply hiter n f g hn hf hg,
   obtain ⟨⟨l, hl⟩, ⟨u, hu⟩, ⟨p, hp⟩⟩ := ⟨polysize.lower α, polysize.upper α, H⟩,
-  refine ⟨l.comp (p.comp u), λ x m h, _⟩,
+  refine ⟨l.comp (p.comp u), λ x m h hs, _⟩,
   simp only [polynomial.eval_comp],
-  exact (hl _).trans (l.eval_mono $ (hp _ _ h).trans $ p.eval_mono $ hu _),
+  exact (hl _).trans (l.eval_mono $ (hp _ _ h hs).trans $ p.eval_mono $ hu _),
 end
 
-/-- Here, we allow the input to the iteration to pass through a preprocessing stage `g` first -/
-private lemma it₂ (hiter : has_iterate (α × β)) {n : α → tree unit} {f : α → β → β} {g : α → β} (hn : n ∈ₑ polytime)
-  (hf : f ∈ₑ polytime) (hg : g ∈ₑ polytime) (hp : ∃ p : mv_polynomial (fin 2) ℕ, ∀ x y (m ≤ (n x).num_nodes), size ((f x)^[m] y) ≤ mv_polynomial.eval ![size x, size y] p) :
+private lemma it₂ (hiter : it strict (α × β) α) {n : α → tree unit} {f : α → β → β} {g : α → β} (hn : n ∈ₑ polytime)
+  (hf : f ∈ₑ polytime) (hg : g ∈ₑ polytime)
+  (hp : ∃ p : mv_polynomial (fin 2) ℕ, ∀ x (m ≤ (n x).num_nodes), ∀ y, (strict → y = g x) → size ((f x)^[m] y) ≤ mv_polynomial.eval ![size x, size y] p) :
   polytime.mem (λ x, (f x)^[(n x).num_nodes] (g x)) :=
 begin
   set f' := λ xy : α × β, (xy.1, f xy.1 xy.2),
   have hf' : ∀ n x y, f'^[n] (x, y) = (x, (f x)^[n] y),
   { intros n x y, induction n with n ih generalizing y, { simp, }, { simp [ih], } }, 
-  have := it₁ hiter (λ xy, n (prod.fst xy)) f' (by complexity) (by complexity) _,
-  { convert (complexity_class.mem.snd.comp this).comp (polytime.id'.pair hg),
-    ext x, simp [hf'], },
+  have := it₁ hiter (λ xy, n (prod.fst xy)) f' (λ x, (x, g x)) (by complexity) (by complexity) (by complexity) _,
+  { convert complexity_class.mem.snd.comp this, ext x, simp [hf'], },
   cases hp with p hp,
   use (mv_polynomial.X 0 + p).to_polynomial,
-  rintros ⟨x₁, x₂⟩ m hm,
-  simp at hm ⊢,
+  rintros ⟨x₁, x₂⟩ m hm hs,
+  simp at hm hs ⊢,
   refine trans _ (mv_polynomial.le_to_polynomial_of_le_sum₂ _ _ _),
-  simpa [hf'] using hp x₁ x₂ m hm,
+  simpa [hf'] using hp x₁ m hm x₂ (λ H, (hs H).symm),
 end
 
 /-- The same as `it₂` but `n` is a function to `ℕ` now -/
-private theorem it₃ (hiter : has_iterate (α × β)) {n : α → ℕ} {f : α → β → β} {g : α → β} (hn : n ∈ₑ P)
+private theorem it₃ (hiter : it strict (α × β) α) {n : α → ℕ} {f : α → β → β} {g : α → β} (hn : n ∈ₑ P)
   (hf : f ∈ₑ P) (hg : g ∈ₑ P) 
-  (hp : ∃ p : mv_polynomial (fin 2) ℕ, ∀ x y (m ≤ n x), size ((f x)^[m] y) ≤ mv_polynomial.eval ![size x, size y] p) :
+  (hp : ∃ p : mv_polynomial (fin 2) ℕ, ∀ x (m ≤ n x) y, (strict → y = g x) → size ((f x)^[m] y) ≤ mv_polynomial.eval ![size x, size y] p) :
   polytime.mem (λ x, (f x)^[n x] (g x)) :=
 by have := it₂ hiter (complexity_class.encode.comp hn) hf hg _; simpa
 
 /-- The condition on `f` is a "local" condition, rather than one involving the iteration of `f` -/
-private lemma it₄ (hiter : has_iterate (α × β)) {n : α → ℕ}
+private lemma it₄ (hiter : it strict (α × β) α) {n : α → ℕ}
   {f : α → β → β} {g : α → β} (hn : n ∈ₑ P) (hf : f ∈ₑ P) (hg : g ∈ₑ P) 
   (hp : polysize_uniform f) : polytime.mem (λ x, (f x)^[n x] (g x)) :=
-it₃ hiter hn hf hg (hp.iterate (by simpa using polytime.size_le hn))
+let ⟨p, H⟩ := hp.iterate (by simpa using polytime.size_le hn) in
+  it₃ hiter hn hf hg ⟨p, λ x m hm y _, H x y m hm⟩
 
 /-- We extract `it₄` on the case of polycodable states so that we can mark
   it to be used by automation in this section. -/
 theorem iterate_uniform' {α β : Type} [polycodable α] [polycodable β] [polysize α] [polysize β]
   {n : α → ℕ} {f : α → β → β} {g : α → β} (hn : n ∈ₑ P) (hf : f ∈ₑ P) (hg : g ∈ₑ P) 
   (hp : polysize_uniform f) : polytime.mem (λ x, (f x)^[n x] (g x)) :=
-it₄ (iterate_aux (α × β)) hn hf hg hp
+it₄ (it_of_polycodable (α × β)) hn hf hg hp
+
 
 local attribute [complexity] iterate_uniform'
 
@@ -254,9 +265,9 @@ by { induction n; simp [function.iterate_succ', *], refl, }
 ⟨λ x, (λ y : tree unit, tree.nil △ y)^[x.num_nodes] tree.nil, 
 begin
   rw [complexity_class.prop_iff_mem],
-  apply it₂ (iterate_aux (tree unit × tree unit)), complexity,
+  apply it₂ (it_of_polycodable (tree unit × tree unit)), complexity,
   use mv_polynomial.X 1 + mv_polynomial.X 0,
-  intros x y m hm,
+  intros x m hm y _,
   simpa [nil_node_iterate] using hm,
 end, λ x, by { rw [← encode_nat_eq_iterate], refl, }⟩
 
@@ -321,39 +332,42 @@ by { simp only [tree.guard_size], split_ifs, { assumption, }, exact zero_le', }
 lemma tree.guard_size_pos (x : tree unit) {n} (h : x.num_nodes ≤ n) : x.guard_size n = x :=
 by rwa [tree.guard_size, if_pos]
 
-private lemma has_iterate_all (α : Type) [tencodable α] : has_iterate α :=
+private lemma has_iterate_all (α β : Type) [tencodable α] [tencodable β] : it tt α β :=
 begin
-  rintros n f ⟨n', pn, hn⟩ ⟨f', pf, hf⟩ ⟨p, H⟩,
-  refine ⟨λ x, (λ s : tree unit, (f' s).guard_size (p.eval x.num_nodes))^[(n' x).num_nodes] x, _, λ x, _⟩,
-  { rw [complexity_class.prop_iff_mem] at *, apply it₃ (iterate_aux (tree unit × tree unit)),
+  rintros n f g ⟨n', pn, hn⟩ ⟨f', pf, hf⟩ ⟨g', pg, hg⟩ ⟨p, H⟩,
+  refine ⟨λ x, (λ s : tree unit, (f' s).guard_size (p.eval (g' x).num_nodes))^[(n' (g' x)).num_nodes] (g' x), _, λ x, _⟩,
+  { rw [complexity_class.prop_iff_mem] at *, apply it₃ (it_of_polycodable (tree unit × tree unit)), 
     complexity,
-    use (mv_polynomial.X 1 + polynomial.to_mv 0 p),
-    intros x y m _, 
+    cases size_le pg with pg' hpg',
+    use (mv_polynomial.X 1 + polynomial.to_mv 0 (p.comp pg')),
+    intros x m _ y _, 
     cases m, { simp, },
     rw iterate_succ_apply',
-    simpa using le_add_left (tree.guard_size_num_nodes_le _ _), },
-  rw hn, 
+    simpa using le_add_left ((tree.guard_size_num_nodes_le _ _).trans $ p.eval_mono $ hpg' x), },
+  rw [hg, hn],
   dsimp [has_uncurry.uncurry],
-  specialize H x, revert H, clear hn, generalize : (n x).num_nodes = N, intro H,
-  induction N with N ih, { simp, },
+  specialize H (g x), 
+  simp only [coe_sort_tt, set.mem_range_self, forall_true_left] at H,
+  revert H, clear hn, generalize : (n (g x)).num_nodes = N, intro H,
+  induction N with N ih,
+  { simp, },
   rw [iterate_succ_apply', ih (λ m hm, H m $ hm.trans N.le_succ), hf,
     tree.guard_size_pos, iterate_succ_apply'], { refl, },
-  simpa [has_uncurry.uncurry, iterate_succ'] using H (N + 1) rfl.le,
+  simpa [has_uncurry.uncurry, iterate_succ'] using H (N + 1) rfl.le,  
 end
 
 /- We now extract `it₃` and `it₄` in the general case unconditionally -/
-
 theorem iterate {n : α → ℕ} {f : α → β → β} {g : α → β} (hn : n ∈ₑ P)
-  (hf : f ∈ₑ P) (hg : g ∈ₑ P) 
-  (hp : ∃ p : mv_polynomial (fin 2) ℕ, ∀ x y (m ≤ n x), size ((f x)^[m] y) ≤ mv_polynomial.eval ![size x, size y] p) :
-  polytime.mem (λ x, (f x)^[n x] (g x)) :=
-it₃ (has_iterate_all _) hn hf hg hp
+  (hf : f ∈ₑ P) (hg : g ∈ₑ P) :
+  (∃ p : polynomial ℕ, ∀ x (m ≤ n x), size ((f x)^[m] (g x)) ≤ p.eval (size x)) →
+  polytime.mem (λ x, (f x)^[n x] (g x))
+| ⟨p, hp⟩ := it₃ (has_iterate_all _ _) hn hf hg ⟨polynomial.to_mv 0 p, by simpa using hp⟩
 
 local attribute [-complexity] iterate_uniform'
 
 @[complexity] theorem iterate_uniform {n : α → ℕ} {f : α → β → β} {g : α → β} (hn : n ∈ₑ P)
   (hf : f ∈ₑ P) (hg : g ∈ₑ P) (hp : polysize_uniform f) : polytime.mem (λ x, (f x)^[n x] (g x)) :=
-it₄ (has_iterate_all _) hn hf hg hp
+it₄ (has_iterate_all _ _) hn hf hg hp
 
 end iterate
 
@@ -364,3 +378,9 @@ section stack_rec
 end stack_rec
 
 end polytime
+
+-- example (p q : Prop) (hp : ¬p) : p → q := by library_search
+
+-- example : ¬(ff : Prop) := bool.not_ff
+
+-- #check not.elim
