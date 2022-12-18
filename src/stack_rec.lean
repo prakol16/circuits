@@ -117,5 +117,3 @@ variables {α β : Type} (base : α → β) (pre : ℕ → α → α) (post : β
 | (n+1) x := post (stack_rec n (pre n x)) n x
 
 end nat
-
-

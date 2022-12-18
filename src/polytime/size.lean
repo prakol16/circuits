@@ -1,3 +1,4 @@
+import data.list.big_operators
 import encode
 
 open tencodable function tree
@@ -23,24 +24,87 @@ instance fintype.polysize [fintype α] : polysize α :=
   lower := ⟨polynomial.C ((@finset.univ α _).sup (λ x, (encode x).num_nodes)), 
     λ x, by { simp, exact finset.le_sup (finset.mem_univ x), }⟩ }
 
+lemma list.encode_num_nodes_eq : ∀ (x : list α),
+  (encode x).num_nodes = x.length + (x.map $ λ e, (encode e).num_nodes).sum
+| [] := rfl
+| (hd :: tl) := by { simp [encode_cons, tl.encode_num_nodes_eq], abel, }
+
+lemma list.len_le_encode (x : list α) : x.length ≤ (encode x).num_nodes :=
+by { rw x.encode_num_nodes_eq, exact le_self_add, }
+
+lemma list.encode_le_encode_of_mem {x : list α} {y : α} (h : y ∈ x) :
+  (encode y).num_nodes < (encode x).num_nodes :=
+begin
+  rw [x.encode_num_nodes_eq, ← multiset.coe_sum],
+  refine lt_add_of_pos_of_le (list.length_pos_of_mem h) (multiset.le_sum_of_mem _),
+  simp, exact ⟨_, h, rfl⟩,
+end
+
+@[simp] lemma encode_sum_inl_num_nodes (x : α) :
+  (encode (sum.inl x : α ⊕ β)).num_nodes = (encode x).num_nodes + 1 := by simp [encode]
+
+@[simp] lemma encode_sum_inr_num_nodes (x : β) :
+  (encode (sum.inr x : α ⊕ β)).num_nodes = (encode x).num_nodes + 2 :=
+by { simp [encode], ring, }
+
 variables [polysize α] [polysize β] [polysize γ]
 
 instance : polysize (α × β) :=
-begin
-  refine_struct { size := λ x : α × β, size x.1 + size x.2 },
-  { cases upper α with p hp, cases upper β with q hq,
+{ size := λ x : α × β, size x.1 + size x.2,
+  upper := begin
+    cases upper α with p hp, cases upper β with q hq,
     use p + q, rintro ⟨x₁, x₂⟩,
     rw polynomial.eval_add,
     refine add_le_add ((hp _).trans $ p.eval_mono _) ((hq _).trans $ q.eval_mono _);
-    simp [encode]; linarith only, },
-  cases lower α with p hp, cases lower β with q hq,
-  use p + q + 1, rintro ⟨x₁, x₂⟩,
-  simp only [encode, num_nodes, polynomial.eval_add, polynomial.eval_one, add_le_add_iff_right],
-  exact add_le_add ((hp _).trans $ p.eval_mono le_self_add)
-    ((hq _).trans $ q.eval_mono le_add_self),
-end
+    simp [encode]; linarith only,
+  end,
+  lower := begin
+    cases lower α with p hp, cases lower β with q hq,
+    use p + q + 1, rintro ⟨x₁, x₂⟩,
+    simp only [encode, num_nodes, polynomial.eval_add, polynomial.eval_one, add_le_add_iff_right],
+    exact add_le_add ((hp _).trans $ p.eval_mono le_self_add)
+      ((hq _).trans $ q.eval_mono le_add_self),
+  end }
 
 @[simp] lemma polysize.prod_size (x : α) (y : β) : size (x, y) = size x + size y := rfl
+
+instance : polysize (list α) :=
+{ size := λ l, l.length + (l.map size).sum,
+  upper := begin
+    cases upper α with p hp,
+    use polynomial.X + polynomial.X * p,
+    intro x, simp,
+    refine add_le_add x.len_le_encode ((list.sum_le_card_nsmul _ (p.eval (encode x).num_nodes) _).trans _),
+    { simpa using λ a ha, (hp a).trans (p.eval_mono (list.encode_le_encode_of_mem ha).le), },
+    simpa using nat.mul_le_mul_right _ x.len_le_encode,
+  end,
+  lower := begin
+    cases lower α with p hp,
+    use polynomial.X + polynomial.X * p,
+    intro x, simp [x.encode_num_nodes_eq, add_assoc],
+    refine le_add_left ((list.sum_le_card_nsmul _ (p.eval (x.map size).sum) _).trans _),
+    { simp, intros a ha, refine (hp _).trans (p.eval_mono _), 
+      rw ← multiset.coe_sum, apply multiset.le_sum_of_mem,
+      simp, exact ⟨_, ha, rfl⟩, },
+    simpa using nat.mul_le_mul le_self_add (p.eval_mono le_add_self),
+  end }
+
+instance : polysize (α ⊕ β) :=
+{ size := λ x, x.elim size size,
+  upper := begin
+    cases upper α with p hp, cases upper β with q hq,
+    use p + q,
+    rintros (x|x); simp,
+    exacts [le_add_right ((hp x).trans (p.eval_mono le_self_add)),
+            le_add_left ((hq x).trans (q.eval_mono le_self_add))],
+  end,
+  lower := begin
+    cases lower α with p hp, cases lower β with q hq,
+    use p + q + 2,
+    rintros (x|x); simp,
+    exacts [add_le_add (le_add_right (hp x)) one_le_two,
+            le_add_left (hq x)],
+  end }
 
 instance : polysize ℕ := default
 instance : polysize (tree unit) := default
