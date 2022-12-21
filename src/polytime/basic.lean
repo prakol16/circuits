@@ -2,6 +2,7 @@ import data.polynomial.eval
 import tactic.expand_exists
 import complexity_class.stack_rec
 import polytime.size
+import polytime.stack_rec_size
 
 open tree tencodable function
 open_locale tree

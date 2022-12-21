@@ -88,14 +88,20 @@ by { simp only [time_steps, num_nodes, mul_add, show 5 * 1 = 1 + 2 + 1 + 1, from
   (sum.inr $ x.stack_rec base pre₁ pre₂ post arg) :: xs :=
 by induction x using tree.unit_rec_on generalizing arg xs; simp [time_steps_node, function.iterate_add, *]
 
-lemma stack_step_iterate' (x : tree unit) (arg : α) {n : ℕ} (hn : 5 * x.num_nodes + 1 ≤ n) :
+lemma stack_step_iterate' (x : tree unit) (arg : α) {n : ℕ} (hn : x.time_steps ≤ n) :
   (stack_step base pre₁ pre₂ post)^[n] [sum.inl (x, arg, none)] =
     [sum.inr $ x.stack_rec base pre₁ pre₂ post arg] :=
 begin
-  rw ← time_steps at hn,
   rcases le_iff_exists_add'.mp hn with ⟨n, rfl⟩,
   simp [function.iterate_add, function.iterate_fixed],
 end
+
+lemma stack_step_iterate_min (x : tree unit) (arg : α) (n : ℕ) :
+  (stack_step base pre₁ pre₂ post)^[min n x.time_steps] [sum.inl (x, arg, none)] =
+    ((stack_step base pre₁ pre₂ post)^[n] [sum.inl (x, arg, none)]) :=
+(le_total n x.time_steps).elim 
+  (λ H, by rw min_eq_left_iff.mpr H)
+  (λ H, by rwa [min_eq_right_iff.mpr H, stack_step_iterate, stack_step_iterate'])
 
 end tree
 

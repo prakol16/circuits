@@ -42,6 +42,14 @@ lemma height_le_num_nodes : ∀ (x : tree α), x.height ≤ x.num_nodes
 | nil := nil
 | (node _ l r) := r
 
+lemma left_num_nodes_le : ∀ (x : tree α), x.left.num_nodes ≤ x.num_nodes
+| (tree.node _ l r) := nat.add_le_add (nat.le_add_right _ _) (nat.zero_le 1)
+| tree.nil := rfl.le
+
+lemma right_num_nodes_le : ∀ (x : tree α), x.right.num_nodes ≤ x.num_nodes
+| (tree.node _ l r) := nat.add_le_add (nat.le_add_left _ _) (nat.zero_le 1)
+| tree.nil := rfl.le
+
 /- Notation for making a node with `unit` data -/
 localized "infixr ` △ `:65 := tree.node ()" in tree
 

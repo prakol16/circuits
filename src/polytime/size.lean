@@ -66,6 +66,20 @@ instance : polysize (α × β) :=
       ((hq _).trans $ q.eval_mono le_add_self),
   end }
 
+instance : polysize (option α) :=
+{ size := λ x, x.elim 0 size,
+  upper := begin
+    cases upper α with p hp, use p,
+    rintro (_|x), { simp, },
+    simp only [encode, option.elim, num_nodes, zero_add],
+    refine (hp _).trans (p.eval_mono _), simp,
+  end,
+  lower := begin
+    cases lower α with p hp, use p + 1,
+    rintro (_|x), { simp [encode], },
+    simpa [encode] using hp _,
+  end }
+
 @[simp] lemma polysize.prod_size (x : α) (y : β) : size (x, y) = size x + size y := rfl
 
 instance : polysize (list α) :=
@@ -89,6 +103,19 @@ instance : polysize (list α) :=
     simpa using nat.mul_le_mul le_self_add (p.eval_mono le_add_self),
   end }
 
+@[simp] lemma size_nil : size ([] : list α) = 0 := rfl
+@[simp] lemma size_cons (x : α) (xs : list α) : size (x :: xs) = size x + size xs + 1 :=
+by { simp [size], abel, }
+
+lemma list.size_le_mul_of_le (a b : ℕ) (l : list α)
+  (h₁ : l.length ≤ a) (h₂ : ∀ x ∈ l, size x ≤ b) :
+  size l ≤ a * (b + 1) :=
+begin
+  simp only [size, add_comm b 1, mul_add, mul_one],
+  refine add_le_add h₁ ((list.sum_le_card_nsmul _ b _).trans _),
+  { simpa using h₂, }, { simpa using mul_le_mul_right' h₁ b, }
+end
+
 instance : polysize (α ⊕ β) :=
 { size := λ x, x.elim size size,
   upper := begin
@@ -105,6 +132,9 @@ instance : polysize (α ⊕ β) :=
     exacts [add_le_add (le_add_right (hp x)) one_le_two,
             le_add_left (hq x)],
   end }
+
+@[simp] lemma size_inl (x : α) : size (sum.inl x : α ⊕ β) = size x := rfl
+@[simp] lemma size_inr (x : β) : size (sum.inr x : α ⊕ β) = size x := rfl
 
 instance : polysize ℕ := default
 instance : polysize (tree unit) := default
