@@ -47,12 +47,19 @@ variable {C}
 
 @[simp] lemma mem1_iff_mem {f : α → β} : C.mem1 f ↔ f ∈ₑ C := iff.rfl
 
-lemma mem_iff_mem_pred {f : α → Prop} :
+private lemma mem_iff_mem_pred_aux {f : α → Prop} :
   (λ x, @to_bool (f x) (classical.dec _)) ∈ₑ C ↔ f ∈ₚ C := iff.rfl
 
-lemma mem_iff_mem_pred' {f : α → Prop} [decidable_pred f] :
+lemma mem_iff_mem_pred {f : α → Prop} [decidable_pred f] :
   ((λ x, to_bool (f x)) ∈ₑ C) ↔ f ∈ₚ C :=
-by { convert mem_iff_mem_pred, ext, congr, }
+by { convert mem_iff_mem_pred_aux, ext, congr, }
+
+private lemma mem_iff_mem_rel_aux {f : α → α → Prop} :
+  ((λ x y, @to_bool (f x y) (classical.dec _))) ∈ₑ C ↔ f ∈ₚ C := iff.rfl
+
+lemma mem_iff_mem_rel {f : α → α → Prop} [decidable_rel f] :
+  ((λ x y, (f x y : bool))) ∈ₑ C ↔ f ∈ₚ C :=
+by { convert mem_iff_mem_rel_aux, ext, congr, }
 
 @[simp] lemma prop_iff_mem {f : tree unit → tree unit} :
   C.prop f ↔ f ∈ₑ C :=

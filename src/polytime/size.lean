@@ -1,4 +1,5 @@
 import data.list.big_operators
+import tactic.expand_exists
 import encode
 
 open tencodable function tree
@@ -144,8 +145,19 @@ by simp [polysize.size]
 
 @[simp] lemma polysize_tree_unit (x : tree unit) : size x = x.num_nodes := rfl
 
+def polysize_fun {γ : Type} [has_uncurry γ α β] (f : γ) : Prop :=
+∃ (p : polynomial ℕ), ∀ x : α, size (↿f x) ≤ p.eval (size x)
+
 def polysize_safe (f : α → β → γ) : Prop :=
 ∃ (p : polynomial ℕ), ∀ x y, size (f x y) ≤ size y + p.eval (size x)
+
+@[expand_exists polysize_fun.poly polysize_fun.spec]
+lemma polysize_fun.def {γ : Type} [has_uncurry γ α β] {f : γ} (hf : polysize_fun f) :
+  ∃ (p : polynomial ℕ), ∀ x : α, size (↿f x) ≤ p.eval (size x) := hf
+
+@[expand_exists polysize_safe.poly polysize_safe.spec]
+lemma polysize_safe.def {f : α → β → γ} (hf : polysize_safe f) :
+  ∃ (p : polynomial ℕ), ∀ x y, size (f x y) ≤ size y + p.eval (size x) := hf
 
 theorem polysize_safe.iterate {f : α → β → β} {n : α → ℕ}
   (hf : polysize_safe f) (hn : ∃ p : polynomial ℕ, ∀ x, n x ≤ p.eval (size x)) :

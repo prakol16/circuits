@@ -50,11 +50,11 @@ by { complexity using (λ b, if b then ff else tt), cases b; refl, }
 /-- Complexity classes are closed under intersection -/
 @[complexity] protected lemma and {P₁ P₂ : α → Prop} (h₁ : P₁ ∈ₚ C) (h₂ : P₂ ∈ₚ C) :
   (λ x, (P₁ x) ∧ (P₂ x)) ∈ₚ C :=
-by { classical, simp [← mem_iff_mem_pred'], complexity, }
+by { classical, simp [← mem_iff_mem_pred], complexity, }
 
 /-- Complexity classes are closed under complementation -/
 @[complexity] protected lemma not {P : α → Prop} (h : P ∈ₚ C) : C.mem_pred (λ x, ¬(P x)) :=
-by { classical, simp [← mem_iff_mem_pred'], complexity, }
+by { classical, simp [← mem_iff_mem_pred], complexity, }
 
 @[complexity] lemma eq_const_aux : ∀ (x : tree unit), (=x) ∈ₚ C
 | tree.nil := eq_nil_aux
@@ -116,7 +116,7 @@ let H : C.mem (λ x (_ : unit), f x) := of_from_fintype (λ x, C.const _)
 /-- Complexity classes are closed under union -/
 @[primrec] protected lemma or {P Q : α → Prop} (hP : P ∈ₚ C) (hQ : Q ∈ₚ C) :
   C.mem_pred (λ x, (P x) ∨ (Q x)) :=
-by { classical, simp [← mem_iff_mem_pred'], complexity, }
+by { classical, simp [← mem_iff_mem_pred], complexity, }
 
 section option
 
