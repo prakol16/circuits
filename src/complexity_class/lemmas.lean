@@ -234,6 +234,9 @@ end
 @[complexity] lemma head' : (@list.head' α) ∈ₑ C :=
 by { delta list.head', clean_target, complexity, }
 
+@[complexity] lemma head [inhabited α] : (@list.head α _) ∈ₑ C :=
+by { delta list.head, clean_target, complexity, }
+
 @[complexity] lemma tail : (@list.tail α) ∈ₑ C :=
 by { delta list.tail, clean_target, complexity, }
 

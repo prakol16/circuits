@@ -1,9 +1,10 @@
 import data.list.big_operators
 import tactic.expand_exists
+import complexity_class.tactic
 import encode
 
 open tencodable function tree
-variables {α β γ : Type*}
+variables {α β γ δ ε : Type*}
 
 class polysize (α : Type*) [tencodable α] :=
 (size : α → ℕ)
@@ -11,7 +12,7 @@ class polysize (α : Type*) [tencodable α] :=
 (lower [] : ∃ p : polynomial ℕ, ∀ x, (encode x).num_nodes ≤ p.eval (size x))
 
 open polysize
-variables [tencodable α] [tencodable β] [tencodable γ]
+variables [tencodable α] [tencodable β] [tencodable γ] [tencodable δ] [tencodable ε]
 
 instance : inhabited (polysize α) :=
 ⟨{ size := λ x, (encode x).num_nodes,
@@ -33,7 +34,7 @@ lemma list.encode_num_nodes_eq : ∀ (x : list α),
 lemma list.len_le_encode (x : list α) : x.length ≤ (encode x).num_nodes :=
 by { rw x.encode_num_nodes_eq, exact le_self_add, }
 
-lemma list.encode_le_encode_of_mem {x : list α} {y : α} (h : y ∈ x) :
+lemma list.encode_lt_encode_of_mem {x : list α} {y : α} (h : y ∈ x) :
   (encode y).num_nodes < (encode x).num_nodes :=
 begin
   rw [x.encode_num_nodes_eq, ← multiset.coe_sum],
@@ -48,7 +49,7 @@ end
   (encode (sum.inr x : α ⊕ β)).num_nodes = (encode x).num_nodes + 2 :=
 by { simp [encode], ring, }
 
-variables [polysize α] [polysize β] [polysize γ]
+variables [polysize α] [polysize β] [polysize γ] [polysize δ] [polysize ε]
 
 instance : polysize (α × β) :=
 { size := λ x : α × β, size x.1 + size x.2,
@@ -90,7 +91,7 @@ instance : polysize (list α) :=
     use polynomial.X + polynomial.X * p,
     intro x, simp,
     refine add_le_add x.len_le_encode ((list.sum_le_card_nsmul _ (p.eval (encode x).num_nodes) _).trans _),
-    { simpa using λ a ha, (hp a).trans (p.eval_mono (list.encode_le_encode_of_mem ha).le), },
+    { simpa using λ a ha, (hp a).trans (p.eval_mono (list.encode_lt_encode_of_mem ha).le), },
     simpa using nat.mul_le_mul_right _ x.len_le_encode,
   end,
   lower := begin
@@ -104,9 +105,33 @@ instance : polysize (list α) :=
     simpa using nat.mul_le_mul le_self_add (p.eval_mono le_add_self),
   end }
 
+/-- The same as `list.encode_lt_encode_of_mem` but for `size` -/
+lemma list.size_lt_of_mem {x : list α} {e : α} (h : e ∈ x) :
+  size e < size x :=
+begin
+  dsimp only [polysize.size],
+  rw [← multiset.coe_sum],
+  refine lt_add_of_pos_of_le (list.length_pos_of_mem h) (multiset.le_sum_of_mem _),
+  simp, exact ⟨_, h, rfl⟩,
+end
+
+lemma list.size_le_of_sublist {x y : list α} (h : y <+ x) :
+  size y ≤ size x :=
+add_le_add h.length_le ((h.map size).sum_le_sum $ λ _ _, zero_le')
+
+lemma list.length_le_size (l : list α) : l.length ≤ size l := le_self_add
+
 @[simp] lemma size_nil : size ([] : list α) = 0 := rfl
+
 @[simp] lemma size_cons (x : α) (xs : list α) : size (x :: xs) = size x + size xs + 1 :=
 by { simp [size], abel, }
+
+@[simp] lemma size_append (x y : list α) : size (x ++ y) = size x + size y :=
+by { simp [size], abel, }
+
+@[simp] lemma size_reverse (x : list α) : size x.reverse = size x :=
+by simp [size, list.sum_reverse]
+
 
 lemma list.size_le_mul_of_le (a b : ℕ) (l : list α)
   (h₁ : l.length ≤ a) (h₂ : ∀ x ∈ l, size x ≤ b) :
@@ -137,15 +162,18 @@ instance : polysize (α ⊕ β) :=
 @[simp] lemma size_inl (x : α) : size (sum.inl x : α ⊕ β) = size x := rfl
 @[simp] lemma size_inr (x : β) : size (sum.inr x : α ⊕ β) = size x := rfl
 
-instance : polysize ℕ := default
+-- Equal to `default` but more useful defeq
+instance : polysize ℕ :=
+{ size := λ n, n,
+  upper := ⟨polynomial.X, by simp⟩,
+  lower := ⟨polynomial.X, by simp⟩ }
 instance : polysize (tree unit) := default
 
-@[simp] lemma polysize_unary_nat (n : ℕ) : size n = n :=
-by simp [polysize.size]
+@[simp] lemma polysize_unary_nat (n : ℕ) : size n = n := rfl
 
 @[simp] lemma polysize_tree_unit (x : tree unit) : size x = x.num_nodes := rfl
 
-def polysize_fun {γ : Type} [has_uncurry γ α β] (f : γ) : Prop :=
+def polysize_fun {γ : Type*} [has_uncurry γ α β] (f : γ) : Prop :=
 ∃ (p : polynomial ℕ), ∀ x : α, size (↿f x) ≤ p.eval (size x)
 
 def polysize_safe (f : α → β → γ) : Prop :=
@@ -159,19 +187,46 @@ lemma polysize_fun.def {γ : Type} [has_uncurry γ α β] {f : γ} (hf : polysiz
 lemma polysize_safe.def {f : α → β → γ} (hf : polysize_safe f) :
   ∃ (p : polynomial ℕ), ∀ x y, size (f x y) ≤ size y + p.eval (size x) := hf
 
-theorem polysize_safe.iterate {f : α → β → β} {n : α → ℕ}
-  (hf : polysize_safe f) (hn : ∃ p : polynomial ℕ, ∀ x, n x ≤ p.eval (size x)) :
-    ∃ p : mv_polynomial (fin 2) ℕ, ∀ x y (m ≤ n x), size ((f x)^[m] y) ≤ mv_polynomial.eval ![size x, size y] p :=
+theorem polysize_safe.iterate_invariant {f : α → β → β} {n : α → ℕ}  (inv : α → β → Prop)
+  (hinv : ∀ x y, inv x y → inv x (f x y))
+  (hf : ∃ (p : polynomial ℕ), ∀ x y, inv x y → size (f x y) ≤ size y + p.eval (size x))
+  (hn : polysize_fun n) :
+  ∃ p : mv_polynomial (fin 2) ℕ, ∀ x y (m ≤ n x), inv x y → size ((f x)^[m] y) ≤ mv_polynomial.eval ![size x, size y] p :=
 begin
   cases hn with p hn, cases hf with q hf,
   use (mv_polynomial.X 1 + (polynomial.to_mv 0 p) * (polynomial.to_mv 0 q) : mv_polynomial (fin 2) ℕ),
-  intros x y m hm, specialize hn x,
+  intros x y m hm hy, specialize hn x,
   have : ∀ n : ℕ, size ((f x)^[n] y) ≤ size y + n * (q.eval $ size x),
-  { intro n, induction n with n ih, 
+   { intro n, induction n with n ih generalizing y, 
     { simp, },
-    rw [iterate_succ_apply', nat.succ_mul, ← add_assoc],
-    refine (hf x _).trans _,
-    simpa using ih, },
+    rw [iterate_succ_apply, nat.succ_mul, nat.add_comm _ (q.eval (size x)), ← add_assoc],
+    refine (ih _ $ hinv x y hy).trans _,
+    simpa using hf x y hy, },
   refine (this $ m).trans _,
   simp, mono, exacts [hm.trans hn, zero_le'],
 end
+
+theorem polysize_safe.iterate {f : α → β → β} {n : α → ℕ}
+  (hf : polysize_safe f) (hn : polysize_fun n) :
+    ∃ p : mv_polynomial (fin 2) ℕ, ∀ x y (m ≤ n x), size ((f x)^[m] y) ≤ mv_polynomial.eval ![size x, size y] p :=
+by simpa using polysize_safe.iterate_invariant (λ _ _, true) (λ _ _ _, trivial)
+    ⟨hf.poly, λ x y _, hf.spec x y⟩ hn
+
+theorem polysize_safe.comp {f : γ → δ → ε} {g : α → γ} {h : α → β → δ} :
+  polysize_safe f → polysize_fun g → polysize_safe h → polysize_safe (λ x y, f (g x) (h x y))
+| ⟨pf, hf⟩ ⟨pg, hg⟩ ⟨ph, hh⟩ :=
+begin
+  use ph + (pf.comp pg),
+  intros x y,
+  refine (hf _ _).trans _,
+  simp [← add_assoc], mono*,
+end
+
+@[complexity] theorem polysize_safe.id : polysize_safe (λ _ : α, @id β) :=
+⟨0, by simp⟩
+
+@[complexity] theorem polysize_safe.id' : polysize_safe (λ (_ : α) (y : β), y) := polysize_safe.id
+
+@[complexity] theorem polysize_safe.cons {f : α → γ} {g : α → β → list γ} (hf : polysize_fun f) (hg : polysize_safe g) :
+  polysize_safe (λ (x : α) (y : β), (f x) :: (g x y)) :=
+by { apply polysize_safe.comp _ hf hg, use polynomial.X + 1, intros, apply le_of_eq, simp, abel, }

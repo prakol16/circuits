@@ -98,3 +98,27 @@ calc p.to_polynomial.eval a = mv_polynomial.eval (λ _, a) p : (p.to_polynomial_
                         ... ≤ mv_polynomial.eval x p : p.eval_mono hx
 
 end mv_polynomial
+
+namespace list
+
+theorem scanl_nth_le_eq_foldl {α β : Type*} (l : list β) (f : α → β → α) (x : α)
+  (n : ℕ) (hn : n < (l.scanl f x).length) :
+  (l.scanl f x).nth_le n hn = (l.take n).foldl f x :=
+begin
+  revert hn, simp only [length_scanl],
+  induction l with hd tl ih generalizing x n, { simp, },
+  cases n, { simp, }, 
+  simpa [nat.succ_eq_add_one] using ih (f x hd) n,
+end
+
+theorem scanl_last_eq_foldl {α β : Type*} (l : list β) (f : α → β → α) (x : α) :
+  (l.scanl f x).last' = some (l.foldl f x) :=
+by simp [last'_eq_last_of_ne_nil (ne_nil_of_length_eq_succ (l.length_scanl x)), last_eq_nth_le, l.scanl_nth_le_eq_foldl f x, l.length_scanl x]
+
+@[simp] theorem reverse_last' {α : Type*} (l : list α) :
+  l.reverse.last' = l.head' := by cases l; simp
+
+@[simp] theorem reverse_head' {α : Type*} (l : list α) :
+  l.reverse.head' = l.last' := by simpa [eq_comm] using l.reverse.reverse_last'
+
+end list
