@@ -240,6 +240,12 @@ by { delta list.head, clean_target, complexity, }
 @[complexity] lemma tail : (@list.tail α) ∈ₑ C :=
 by { delta list.tail, clean_target, complexity, }
 
+@[complexity] protected lemma equiv_list : ⇑tencodable.equiv_list ∈ₑ C :=
+⟨_, C.id, λ x, by simp [encode, has_uncurry.uncurry]⟩ 
+
+@[complexity] protected lemma equiv_list_symm : ⇑tencodable.equiv_list.symm ∈ₑ C :=
+⟨_, C.id, λ x, by simp [encode, has_uncurry.uncurry]⟩
+
 end list
 
 end complexity_class

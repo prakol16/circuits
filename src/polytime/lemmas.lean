@@ -10,7 +10,6 @@ namespace polytime
 open_locale complexity_class
 
 variables {α β γ : Type} [tencodable α] [tencodable β] [tencodable γ]
-  [polysize α] [polysize β] [polysize γ]
 
 section stack_rec
 
@@ -20,7 +19,7 @@ variables {base : γ → α → β} {pre₁ pre₂ : γ → tree unit → tree u
   {post : γ → β → β → tree unit → tree unit → α → β}
 
 @[complexity]
-protected theorem stack_rec {st : γ -> tree unit} {arg : γ → α} (hst : st ∈ₑ PTIME) (harg : arg ∈ₑ PTIME) (hb : base ∈ₑ PTIME) (hpr₁ : pre₁ ∈ₑ PTIME) (hpr₂ : pre₂ ∈ₑ PTIME) (hpo : post ∈ₑ PTIME)
+protected theorem stack_rec [polysize α] [polysize β] [polysize γ] {st : γ -> tree unit} {arg : γ → α} (hst : st ∈ₑ PTIME) (harg : arg ∈ₑ PTIME) (hb : base ∈ₑ PTIME) (hpr₁ : pre₁ ∈ₑ PTIME) (hpr₂ : pre₂ ∈ₑ PTIME) (hpo : post ∈ₑ PTIME)
   (hpr₁' : polysize_safe (λ (usf : γ × tree unit × tree unit) (sf : α), pre₁ usf.1 usf.2.1 usf.2.2 sf))
   (hpr₂' : polysize_safe (λ (usf : γ × tree unit × tree unit) (sf : α), pre₂ usf.1 usf.2.1 usf.2.2 sf))
   (hpo' : polysize_safe (λ (usf : γ × tree unit × tree unit × α) (sf : β × β), post usf.1 sf.1 sf.2 usf.2.1 usf.2.2.1 usf.2.2.2)) :
@@ -57,7 +56,6 @@ section list
 begin
   complexity using λ x, (encode x).stack_rec (λ _ : unit, 0) (λ _ _ _, ()) (λ _ _ _, ())
     (λ _ ih _ _ _, ih + 1) (),
-  { use 0, simp, }, { use 0, simp, }, { use 1, simp, },
   induction x with hd tl ih, { refl, },
   simpa [encode_cons],
 end
@@ -84,7 +82,7 @@ theorem scanl_step_iterate {α : Type*} (f : β → α → β) (l : list α) (x 
   (scanl_step f)^[l.length] (l, [x]) = ([], (l.scanl f x).reverse) :=
 by { rw [scanl_step_iterate', ← @list.length_scanl _ _ f x l], simp, }
 
-theorem foldl_size_le (f : β → α → β) (p : ℕ → ℕ) (hp : monotone p)
+theorem foldl_size_le [polysize α] [polysize β] (f : β → α → β) (p : ℕ → ℕ) (hp : monotone p)
   (hf : ∀ x y, size (f x y) ≤ size x + p (size y)) (ls : list α) (x₀ : β) :
   size (ls.foldl f x₀) ≤ size x₀ + ls.length * p (size ls) :=
 begin
@@ -94,7 +92,7 @@ begin
   simp; linarith only,
 end
 
-lemma list_scanl_rev {lst : γ → list α} {acc : γ → β} {f : γ → β → α → β}
+lemma list_scanl_rev [polysize α] [polysize β] [polysize γ] {lst : γ → list α} {acc : γ → β} {f : γ → β → α → β}
   (hlst : lst ∈ₑ PTIME) (hacc : acc ∈ₑ PTIME) (hf : f ∈ₑ PTIME)
   (hf' : polysize_safe (λ (usf : γ × α) (sf : β), f usf.1 sf usf.2)) :
   polytime.mem (λ x : γ, ((lst x).scanl (f x) (acc x)).reverse) :=
@@ -102,8 +100,7 @@ begin
   convert_to polytime.mem (λ x, ((scanl_step (f x))^[(lst x).length] (lst x, [acc x])).2),
   { simp [scanl_step_iterate], },
   refine complexity_class.mem.snd.comp _,
-  apply iterate,
-  { complexity, }, { complexity, }, { complexity, },
+  apply iterate, complexity,
   cases hf' with pf hpf, cases polytime.size_le hlst with pl hpl, cases polytime.size_le hacc with pa hpa,
   use pl + (pl + 1) * (pa + pl * pf.comp (polynomial.X + pl) + 1),
   intros x m _,
@@ -122,7 +119,7 @@ begin
   exacts [zero_le', zero_le'],
 end
 
-@[complexity] lemma list_foldl {lst : γ → list α} {acc : γ → β} {f : γ → β → α → β}
+@[complexity] lemma list_foldl [polysize α] [polysize β] [polysize γ] {lst : γ → list α} {acc : γ → β} {f : γ → β → α → β}
   (hlst : lst ∈ₑ PTIME) (hacc : acc ∈ₑ PTIME) (hf : f ∈ₑ PTIME)
   (hf' : polysize_safe (λ (usf : γ × α) (sf : β), f usf.1 sf usf.2)) :
   polytime.mem (λ x : γ, (lst x).foldl (f x) (acc x)) :=
@@ -138,21 +135,30 @@ begin
   rw [← list.foldr_reverse, list.foldr_eta],
 end
 
-@[complexity] lemma list_scanl {lst : γ → list α} {acc : γ → β} {f : γ → β → α → β}
+@[complexity] lemma list_scanl [polysize α] [polysize β] [polysize γ] {lst : γ → list α} {acc : γ → β} {f : γ → β → α → β}
   (hlst : lst ∈ₑ PTIME) (hacc : acc ∈ₑ PTIME) (hf : f ∈ₑ PTIME)
   (hf' : polysize_safe (λ (usf : γ × α) (sf : β), f usf.1 sf usf.2)) :
   polytime.mem (λ x : γ, ((lst x).scanl (f x) (acc x))) :=
 by simpa using list_reverse.comp (list_scanl_rev hlst hacc hf hf')
 
-@[complexity] theorem list_foldr {lst : γ → list α} {acc : γ → β} {f : γ → α → β → β}
+@[complexity] theorem list_foldr [polysize α] [polysize β] [polysize γ] {lst : γ → list α} {acc : γ → β} {f : γ → α → β → β}
   (hlst : lst ∈ₑ PTIME) (hacc : acc ∈ₑ PTIME) (hf : f ∈ₑ PTIME)
   (hf' : polysize_safe (λ (usf : γ × α) (sf : β), f usf.1 usf.2 sf)) :
   polytime.mem (λ x : γ, (lst x).foldr (f x) (acc x)) :=
 by { simp_rw ← list.foldl_reverse, complexity, }
 
 @[complexity] theorem list_map {lst : γ → list α} {f : γ → α → β} (hlst : lst ∈ₑ PTIME) (hf : f ∈ₑ PTIME) :
-  polytime.mem (λ x, (lst x).map (f x)) :=
+ (λ x, (lst x).map (f x)) ∈ₑ PTIME :=
 by { complexity using (λ x, (lst x).foldr (λ hd acc, (f x hd) :: acc) []), induction lst x; simp [*], }
+
+@[complexity] theorem list_all_some : (@list.all_some α) ∈ₑ PTIME :=
+begin
+  complexity using λ l, l.foldr (λ hd' acc', hd'.bind (λ hd, acc'.map (λ acc, hd :: acc))) (some []),
+  induction l with hd, { simp, }, cases hd; simp [*],
+end
+
+instance {α : Type*} [polycodable α] : polycodable (list α) :=
+{ poly := by { dunfold decode, complexity, } }
 
 end list
 

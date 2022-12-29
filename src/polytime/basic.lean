@@ -277,7 +277,6 @@ by { complexity using (λ x y, nat.succ^[y] x), { use 1, simp, }, simp [nat.succ
 @[complexity] lemma mul : polytime.mem ((*) : ℕ → ℕ → ℕ) :=
 begin
   complexity using (λ x y, (+x)^[y] 0),
-  { use polynomial.X, rintros ⟨a, b⟩ y, simp, },
   induction y; simp [iterate_succ', nat.mul_succ, *, mul_comm],
 end
 

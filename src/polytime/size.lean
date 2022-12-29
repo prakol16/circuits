@@ -14,10 +14,11 @@ class polysize (α : Type*) [tencodable α] :=
 open polysize
 variables [tencodable α] [tencodable β] [tencodable γ] [tencodable δ] [tencodable ε]
 
-instance : inhabited (polysize α) :=
-⟨{ size := λ x, (encode x).num_nodes,
+@[instance, priority 10]
+def default_polysize : polysize α :=
+{ size := λ x, (encode x).num_nodes,
   upper := ⟨polynomial.X, by simp⟩,
-  lower := ⟨polynomial.X, by simp⟩ }⟩
+  lower := ⟨polynomial.X, by simp⟩ }
 
 @[simps]
 instance fintype.polysize [fintype α] : polysize α :=
@@ -82,6 +83,8 @@ instance : polysize (option α) :=
     simpa [encode] using hp _,
   end }
 
+@[simp] lemma polysize.none_size : size (@none α) = 0 := rfl
+@[simp] lemma polysize.some_size (x : α) : size (some x) = size x := rfl
 @[simp] lemma polysize.prod_size (x : α) (y : β) : size (x, y) = size x + size y := rfl
 
 instance : polysize (list α) :=
@@ -162,12 +165,13 @@ instance : polysize (α ⊕ β) :=
 @[simp] lemma size_inl (x : α) : size (sum.inl x : α ⊕ β) = size x := rfl
 @[simp] lemma size_inr (x : β) : size (sum.inr x : α ⊕ β) = size x := rfl
 
--- Equal to `default` but more useful defeq
+-- Equal to `default_polysize` but more useful defeq
 instance : polysize ℕ :=
 { size := λ n, n,
   upper := ⟨polynomial.X, by simp⟩,
   lower := ⟨polynomial.X, by simp⟩ }
-instance : polysize (tree unit) := default
+
+instance : polysize (tree unit) := default_polysize
 
 @[simp] lemma polysize_unary_nat (n : ℕ) : size n = n := rfl
 
@@ -227,6 +231,82 @@ end
 
 @[complexity] theorem polysize_safe.id' : polysize_safe (λ (_ : α) (y : β), y) := polysize_safe.id
 
+@[complexity] theorem polysize_safe.of_polysize_fun {f : α → γ} :
+  polysize_fun f → polysize_safe (λ x (_ : β), f x)
+| ⟨p, hp⟩ := ⟨p, λ x y, le_add_left (hp x)⟩
+
+theorem polysize_safe.comp' {f : γ → δ} {g : α → β → γ}
+  (hf : polysize_safe (λ (_ : unit) x, f x)) (hg : polysize_safe g) :
+  polysize_safe (λ x y, f (g x y)) :=
+hf.comp (show polysize_fun (default : α → unit), from ⟨0, by simp⟩) hg
+
 @[complexity] theorem polysize_safe.cons {f : α → γ} {g : α → β → list γ} (hf : polysize_fun f) (hg : polysize_safe g) :
   polysize_safe (λ (x : α) (y : β), (f x) :: (g x y)) :=
 by { apply polysize_safe.comp _ hf hg, use polynomial.X + 1, intros, apply le_of_eq, simp, abel, }
+
+@[complexity] theorem polysize_safe.const (C : γ) : polysize_safe (λ (_ : α) (_ : β), C) :=
+⟨polynomial.C (size C), λ x y, by simp⟩
+
+@[complexity] theorem polysize_safe.fst {f : α → β → γ × δ} (hf : polysize_safe f) :
+  polysize_safe (λ x y, (f x y).1) :=
+by { refine polysize_safe.comp' _ hf, use 0, simp, }
+
+@[complexity] theorem polysize_safe.snd {f : α → β → γ × δ} (hf : polysize_safe f) :
+  polysize_safe (λ x y, (f x y).2) :=
+by { refine polysize_safe.comp' _ hf, use 0, simp, }
+
+@[complexity] theorem polysize_safe.some {f : α → β → γ} (hf : polysize_safe f) :
+  polysize_safe (λ x y, some (f x y)) :=
+by { refine polysize_safe.comp' _ hf, use 0, simp, }
+
+@[complexity] theorem polysize_safe.pair_left {f : α → γ} {g : α → β → δ} :
+  polysize_fun f → polysize_safe g → polysize_safe (λ x y, (f x, g x y))
+| ⟨pf, hf⟩ ⟨pg, hg⟩ := ⟨pf + pg, λ x y, by { dsimp [has_uncurry.uncurry] at hf, simp, linarith only [hf x, hg x y], }⟩
+
+@[complexity] theorem polysize_safe.pair_right {f : α → γ} {g : α → β → δ} :
+  polysize_safe g → polysize_fun f → polysize_safe (λ x y, (g x y, f x))
+|  ⟨pg, hg⟩ ⟨pf, hf⟩ := ⟨pf + pg, λ x y, by { dsimp [has_uncurry.uncurry] at hf, simp, linarith only [hf x, hg x y], }⟩
+
+@[complexity] theorem polysize_safe.add_unary_left {f : α → ℕ} {g : α → β → ℕ} : 
+  polysize_fun f → polysize_safe g → polysize_safe (λ x y, (f x) + (g x y))
+| ⟨pf, hf⟩ ⟨pg, hg⟩ := ⟨pf + pg, λ x y, by { dsimp [has_uncurry.uncurry, polysize_unary_nat] at hf hg, simp, linarith only [hf x, hg x y], }⟩
+
+@[complexity] theorem polysize_safe.add_unary_right {f : α → ℕ} {g : α → β → ℕ} :
+  polysize_safe g → polysize_fun f → polysize_safe (λ x y, (g x y) + (f x))
+| ⟨pg, hg⟩ ⟨pf, hf⟩ := ⟨pf + pg, λ x y, by { dsimp [has_uncurry.uncurry, polysize_unary_nat] at hf hg, simp, linarith only [hf x, hg x y], }⟩
+
+@[complexity] theorem polysize_safe.ite {f g : α → β → γ} {P : α → β → Prop} [∀ x y, decidable (P x y)] (hf : polysize_safe f) (hg : polysize_safe g) :
+  polysize_safe (λ x y, if P x y then f x y else g x y) :=
+begin
+  rcases hf with ⟨pf, hf⟩, rcases hg with ⟨pg, hg⟩, use pf + pg,
+  intros x y, dsimp only, split_ifs,
+  { refine (hf _ _).trans _, simp, }, { refine (hg _ _).trans _, simp, },
+end
+
+@[complexity] theorem polysize_safe.option_bind₁ {f : α → option γ} {g : α → β → γ → option δ} :
+  polysize_fun f → polysize_safe (λ (usf : α × γ) (sf : β), g usf.1 sf usf.2) →
+  polysize_safe (λ x y, (f x).bind (g x y))
+| ⟨pf, hf⟩ ⟨pg, hg⟩ := ⟨pg.comp (polynomial.X + pf), λ x y, begin
+  cases H : f x with v, { simp [H], },
+  specialize hf x, simp only [H, has_uncurry.uncurry, id] at hf ⊢,
+  refine (hg (x, v) y).trans _,
+  simp, mono*,
+end⟩
+
+@[complexity] theorem polysize_safe.option_bind₂ {f : α → β → option γ} {g : α → γ → option δ} :
+  polysize_safe f → polysize_safe g → polysize_safe (λ x y, (f x y).bind (g x))
+| ⟨pf, hf⟩ ⟨pg, hg⟩ := ⟨pf + pg, λ x y, begin
+  cases H : f x y with v, { simp [H], },
+  specialize hf x y, 
+  simp only [H, polysize.some_size, option.bind_some, polynomial.eval_add, ← add_assoc] at hf ⊢,
+  exact (hg x v).trans (add_le_add_right hf _),
+end⟩
+
+@[complexity] theorem polysize_safe.option_map₁ {f : α → option γ} {g : α → β → γ → δ}
+  (hf : polysize_fun f) (hg : polysize_safe (λ (usf : α × γ) (sf : β), g usf.1 sf usf.2)) :
+  polysize_safe (λ x y, (f x).map (g x y)) :=
+by { apply polysize_safe.option_bind₁ hf, exact polysize_safe.some hg, }
+
+@[complexity] theorem polysize_safe.option_map₂ {f : α → β → option γ} {g : α → γ → δ}
+  (hf : polysize_safe f) (hg : polysize_safe g) : polysize_safe (λ x y, (f x y).map (g x)) :=
+by { apply polysize_safe.option_bind₂ hf, exact polysize_safe.some hg, }
