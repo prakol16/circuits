@@ -9,7 +9,7 @@ namespace polytime
 
 open_locale complexity_class
 
-variables {α β γ : Type} [tencodable α] [tencodable β] [tencodable γ]
+variables {α β γ δ : Type} [tencodable α] [tencodable β] [tencodable γ] [tencodable δ]
 
 section stack_rec
 
@@ -159,6 +159,36 @@ end
 
 instance {α : Type*} [polycodable α] : polycodable (list α) :=
 { poly := by { dunfold decode, complexity, } }
+
+@[complexity] theorem list_tails : (@list.tails α) ∈ₑ PTIME :=
+by { complexity using λ ls, ls.scanl (λ l _, l.tail) ls, induction ls; simp [*], }
+
+@[complexity] theorem list_init : (@list.init α) ∈ₑ PTIME :=
+by { complexity using λ ls, ls.reverse.tail.reverse, induction ls using list.reverse_rec_on; simp [list.init], }
+
+theorem stack_rec_eq [inhabited β] [inhabited γ] (ls : list γ) (base : α → β) (pre : γ → list γ → α → α)
+  (post : β → γ → list γ → α → β) (arg : α) : ls.stack_rec base pre post arg =
+  (ls.tails.init.scanl (λ (acc : list γ × α) (x : list γ), (x.tail, pre x.head x.tail acc.2)) (ls, arg))
+    .foldr (λ ls_arg ih, if ls_arg.1.empty then base ls_arg.2 else post ih ls_arg.1.head ls_arg.1.tail ls_arg.2) (arbitrary _) :=
+begin
+  induction ls with hd tl ih generalizing arg, { simp [list.init], },
+  simp [list.init_cons_of_ne_nil (list.ne_nil_of_length_eq_succ $ list.length_tails _), ih],
+end
+
+theorem list_stack_rec {ls : δ → list γ} {base : δ → α → β} {pre : δ → γ → list γ → α → α}
+  {post : δ → β → γ → list γ → α → β} {arg : δ → α} (hls : ls ∈ₑ PTIME) (hb : base ∈ₑ PTIME)
+  (hpre : pre ∈ₑ PTIME) (hpost : post ∈ₑ PTIME) (harg : arg ∈ₑ PTIME)
+  (hpre' : polysize_safe (λ (usf : δ × γ × list γ) (sf : α), pre usf.1 usf.2.1 usf.2.2 sf))
+  (hpost' : polysize_safe (λ (usf : δ × γ × list γ × α) (sf : β), post usf.1 sf usf.2.1 usf.2.2.1 usf.2.2.2)) :
+  (λ x, (ls x).stack_rec (base x) (pre x) (post x) (arg x)) ∈ₑ PTIME :=
+begin
+  casesI is_empty_or_nonempty δ, { exact complexity_class.of_from_fintype' _, },
+  casesI is_empty_or_nonempty γ, { complexity using (λ x, base x (arg x)), cases ls x with hd, { refl, }, exact is_empty.elim' infer_instance hd, },
+  inhabit δ, inhabit γ, haveI : inhabited α := ⟨arg default⟩, haveI : inhabited β := ⟨base default default⟩,
+  simp_rw stack_rec_eq,
+  complexity, { apply polysize_safe.comp₄_3, complexity, },
+  { apply polysize_safe.comp₅_1, complexity, },
+end
 
 end list
 

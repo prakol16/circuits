@@ -69,6 +69,15 @@ end
   C.mem_pred (λ x, (f x) = y) :=
 by simpa using (eq_const_aux (encode y)).comp hf
 
+@[complexity] lemma list_empty : @list.empty α ∈ₑ C :=
+by { classical, complexity using λ l, l = [], cases l; simp, }
+
+@[complexity] lemma option_is_none : @option.is_none α ∈ₑ C :=
+by { classical, complexity using λ x, x = none, cases x; simp, }
+
+@[complexity] lemma option_is_some : @option.is_some α ∈ₑ C :=
+by { complexity using λ x, !x.is_none, cases x; simp, }
+
 @[complexity] lemma tree_cases {f : α → tree unit} {g : α → β}
   {h : α → unit → tree unit → tree unit → β} (hf : f ∈ₑ C) (hg : g ∈ₑ C) (hh : h ∈ₑ C) :
   @complexity_class.mem α β (α → β) _ _ _ (λ x, @tree.cases_on unit (λ _, β) (f x) (g x) (h x)) C :=

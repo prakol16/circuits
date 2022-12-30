@@ -259,6 +259,18 @@ by { refine polysize_safe.comp' _ hf, use 0, simp, }
   polysize_safe (λ x y, some (f x y)) :=
 by { refine polysize_safe.comp' _ hf, use 0, simp, }
 
+@[complexity] theorem polysize_safe.tail {f : α → β → list γ} (hf : polysize_safe f) :
+  polysize_safe (λ x y, (f x y).tail) :=
+by { refine polysize_safe.comp' _ hf, use 0, rintros ⟨⟩ (_|⟨hd, tl⟩); simp, exact le_add_right le_add_self, }
+
+@[complexity] theorem polysize_safe.head' {f : α → β → list γ} (hf : polysize_safe f) :
+  polysize_safe (λ x y, (f x y).head') :=
+by { refine polysize_safe.comp' _ hf, use 0, rintros ⟨⟩ (_|⟨hd, tl⟩); simp [add_assoc], }
+
+@[complexity] theorem polysize_safe.head [inhabited γ] {f : α → β → list γ} (hf : polysize_safe f) :
+  polysize_safe (λ x y, (f x y).head) :=
+by { refine polysize_safe.comp' _ hf, use polynomial.C (size (default : γ)), rintros ⟨⟩ (_|⟨hd, tl⟩); simp [add_assoc], }
+
 @[complexity] theorem polysize_safe.pair_left {f : α → γ} {g : α → β → δ} :
   polysize_fun f → polysize_safe g → polysize_safe (λ x y, (f x, g x y))
 | ⟨pf, hf⟩ ⟨pg, hg⟩ := ⟨pf + pg, λ x y, by { dsimp [has_uncurry.uncurry] at hf, simp, linarith only [hf x, hg x y], }⟩
@@ -310,3 +322,46 @@ by { apply polysize_safe.option_bind₁ hf, exact polysize_safe.some hg, }
 @[complexity] theorem polysize_safe.option_map₂ {f : α → β → option γ} {g : α → γ → δ}
   (hf : polysize_safe f) (hg : polysize_safe g) : polysize_safe (λ x y, (f x y).map (g x)) :=
 by { apply polysize_safe.option_bind₂ hf, exact polysize_safe.some hg, }
+
+section comp
+variables {α₀ α₁ α₂ α₃ α₄ α₅ α₆ : Type*}
+  [tencodable α₀] [tencodable α₁] [tencodable α₂] [tencodable α₃] [tencodable α₄] [tencodable α₅] [tencodable α₆]
+  [polysize α₀]   [polysize α₁]   [polysize α₂]   [polysize α₃]   [polysize α₄]   [polysize α₅]   [polysize α₆]
+
+-- Convention: compₙ_i₁... means composition of `n`-ary function where i₁, i₂, are safe indices
+-- TODO automate
+
+theorem polysize_safe.comp₄_1 {f : α₀ → α₁ → α₂ → α₃ → γ}
+  {g₀ : α → α₀} {g₁ : α → β → α₁} {g₂ : α → α₂} {g₃ : α → α₃} :
+  polysize_safe (λ (usf : α₀ × α₂ × α₃) (sf : α₁), f usf.1 sf usf.2.1 usf.2.2) → 
+  polysize_fun g₀ → polysize_safe g₁ → polysize_fun g₂ → polysize_fun g₃ →
+  polysize_safe (λ x y, f (g₀ x) (g₁ x y) (g₂ x) (g₃ x))
+| ⟨pf, hf⟩ ⟨p₀, h₀⟩ ⟨p₁, h₁⟩ ⟨p₂, h₂⟩ ⟨p₃, h₃⟩ := ⟨p₁ + pf.comp (p₀ + p₂ + p₃), 
+  λ x y, by { refine (hf (g₀ x, g₂ x, g₃ x) (g₁ x y)).trans _, simp [← add_assoc], mono*, }⟩
+
+theorem polysize_safe.comp₄_3 {f : α₀ → α₁ → α₂ → α₃ → γ}
+  {g₀ : α → α₀} {g₁ : α → α₁} {g₂ : α → α₂} {g₃ : α → β → α₃} :
+  polysize_safe (λ (usf : α₀ × α₁ × α₂) (sf : α₃), f usf.1 usf.2.1 usf.2.2 sf) → 
+  polysize_fun g₀ → polysize_fun g₁ → polysize_fun g₂ → polysize_safe g₃ →
+  polysize_safe (λ x y, f (g₀ x) (g₁ x) (g₂ x) (g₃ x y))
+| ⟨pf, hf⟩ ⟨p₀, h₀⟩ ⟨p₁, h₁⟩ ⟨p₂, h₂⟩ ⟨p₃, h₃⟩ := ⟨p₃ + pf.comp (p₀ + p₁ + p₂), 
+  λ x y, by { refine (hf (g₀ x, g₁ x, g₂ x) (g₃ x y)).trans _, simp [← add_assoc], mono*, }⟩
+
+theorem polysize_safe.comp₅_0 {f : α₀ → α₁ → α₂ → α₃ → α₄ → γ}
+  {g₀ : α → β → α₀} {g₁ : α → α₁} {g₂ : α → α₂} {g₃ : α → α₃} {g₄ : α → α₄} :
+  polysize_safe (λ (usf : α₁ × α₂ × α₃ × α₄) (sf : α₀), f sf usf.1 usf.2.1 usf.2.2.1 usf.2.2.2) → 
+  polysize_safe g₀ → polysize_fun g₁ → polysize_fun g₂ → polysize_fun g₃ → polysize_fun g₄ →
+  polysize_safe (λ x y, f (g₀ x y) (g₁ x) (g₂ x) (g₃ x) (g₄ x))
+| ⟨pf, hf⟩ ⟨p₀, h₀⟩ ⟨p₁, h₁⟩ ⟨p₂, h₂⟩ ⟨p₃, h₃⟩ ⟨p₄, h₄⟩ := ⟨p₀ + pf.comp (p₁ + p₂ + p₃ + p₄),
+  λ x y, by { refine (hf (g₁ x, g₂ x, g₃ x, g₄ x) (g₀ x y)).trans _, simp [← add_assoc], mono*, }⟩
+
+theorem polysize_safe.comp₅_1 {f : α₀ → α₁ → α₂ → α₃ → α₄ → γ}
+  {g₀ : α → α₀} {g₁ : α → β → α₁} {g₂ : α → α₂} {g₃ : α → α₃} {g₄ : α → α₄} :
+  polysize_safe (λ (usf : α₀ × α₂ × α₃ × α₄) (sf : α₁), f usf.1 sf usf.2.1 usf.2.2.1 usf.2.2.2) → 
+  polysize_fun g₀ → polysize_safe g₁ → polysize_fun g₂ → polysize_fun g₃ → polysize_fun g₄ →
+  polysize_safe (λ x y, f (g₀ x) (g₁ x y) (g₂ x) (g₃ x) (g₄ x))
+| ⟨pf, hf⟩ ⟨p₀, h₀⟩ ⟨p₁, h₁⟩ ⟨p₂, h₂⟩ ⟨p₃, h₃⟩ ⟨p₄, h₄⟩ := ⟨p₁ + pf.comp (p₀ + p₂ + p₃ + p₄),
+  λ x y, by { refine (hf (g₀ x, g₂ x, g₃ x, g₄ x) (g₁ x y)).trans _, simp [← add_assoc], mono*, }⟩
+
+
+end comp
