@@ -186,4 +186,10 @@ instance [linear_order α] : preorder (tree α) :=
 instance [linear_order α] : linear_order (tree α) :=
 linear_order_of_compares tree.cmp tree_cmp_compares
 
+instance [linear_order α] : decidable_rel ((≤) : tree α → tree α → Prop) :=
+has_le.le.decidable
+
+instance [linear_order α] : decidable_rel ((<) : tree α → tree α → Prop) :=
+has_lt.lt.decidable
+
 end tree

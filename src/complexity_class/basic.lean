@@ -175,4 +175,7 @@ theorem mem_pred.comp₆
   hf.comp $ hg₀.pair $ hg₁.pair $ hg₂.pair $ hg₃.pair $ hg₄.pair $ hg₅
 end comp
 
+theorem mem.swap_args₂ {f : α → β → γ} : f ∈ₑ C ↔ (flip f) ∈ₑ C :=
+by { split; intro h; exact h.comp₂ mem.snd mem.fst, }
+
 end complexity_class

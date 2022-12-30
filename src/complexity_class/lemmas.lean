@@ -263,7 +263,115 @@ by { delta list.tail, clean_target, complexity, }
 @[complexity] protected lemma equiv_list_symm : ⇑tencodable.equiv_list.symm ∈ₑ C :=
 ⟨_, C.id, λ x, by simp [encode, has_uncurry.uncurry]⟩
 
+lemma const_list_nth (n : ℕ) : (λ l : list α, l.nth n) ∈ₑ C :=
+begin
+  induction n with n ih, { convert head', ext x : 1, cases x; refl, },
+  have : (λ l : list α, l.tail.nth n) ∈ₑ C := ih.comp tail,
+  complexity using λ l, if l.empty then none else l.tail.nth n,
+  cases l; simp,
+end
+
 end list
+
+section subtype
+
+@[complexity] lemma subtype_coe {P : α → Prop} [decidable_pred P] : (coe : {x // P x} → α) ∈ₑ C :=
+⟨_, C.id, λ _, rfl⟩
+
+@[complexity] lemma subtype_val {P : α → Prop} [decidable_pred P] : (subtype.val : {x // P x} → α) ∈ₑ C :=
+subtype_coe
+
+@[complexity] lemma subtype_rec {P : α → Prop} [decidable_pred P]
+  {f : β → {x // P x}} {g : β → ∀ x, P x → γ} :
+  f ∈ₑ C → (λ (a : β) (b : {x // P x}), g a b b.prop) ∈ₑ C →
+  @complexity_class.mem _ _ (β → γ) _ _ _ (λ x, @subtype.rec _ _ (λ _, γ) (g x) (f x)) C
+| ⟨f', pf, hf⟩ ⟨g', pg, hg⟩ := ⟨λ x, g' (x △ (f' x)), by complexity, λ x, begin
+  dsimp [has_uncurry.uncurry] at hg hf ⊢,
+  simp [tencodable.encode_prod] at hg,
+  simp [hf, hg], cases f x, refl,
+end⟩
+
+@[complexity] lemma of_subtype_coe {P : α → Prop} [decidable_pred P] {f : β → {x // P x}} :
+  f ∈ₑ C ↔ (λ x, (f x : α)) ∈ₑ C := iff.rfl
+
+@[complexity] lemma subtype_mk {f : α → β} {P : β → Prop} [decidable_pred P] (hP : ∀ x, P (f x))
+  (hf : f ∈ₑ C) : (λ x, subtype.mk (f x) (hP x)) ∈ₑ C := hf
+
+@[complexity] protected lemma dite {P : α → Prop} [decidable_pred P] {f : ∀ (x : α), P x → β}
+  {g : ∀ (x : α), ¬P x → β} : P ∈ₚ C → (λ x : {a // P a}, f x x.prop) ∈ₑ C →
+  (λ x : {a // ¬P a}, g x x.prop) ∈ₑ C → (λ x, if H : P x then f x H else g x H) ∈ₑ C
+| ⟨P', pP, hP⟩ ⟨f', pf, hf⟩ ⟨g', pg, hg⟩ :=
+⟨λ x, if P' x = encode tt then f' x else g' x, by complexity,
+begin
+  intro x,
+  simp only [hP, has_uncurry.uncurry, tencodable.encode_inj], dsimp, simp only [to_bool_iff],
+  split_ifs with H,
+  { simp [encode] at hf, simp [hf, H], refl, },
+  { simp [encode] at hg, simp [hg, H], refl, }
+end⟩
+
+@[complexity] lemma fin_mk {n} {f : α → ℕ} (P : ∀ x, f x < n) (hf : f ∈ₑ C) :
+  (λ x, (⟨f x, P x⟩ : fin n)) ∈ₑ C := hf
+
+@[complexity] lemma fin_coe {n} : (coe : fin n → ℕ) ∈ₑ C :=
+⟨_, C.id, λ _, rfl⟩
+
+@[complexity] lemma fin_val {n} : (fin.val : fin n → ℕ) ∈ₑ C := fin_coe
+
+@[complexity] lemma fin_rec {n : ℕ} {f : α → fin n} {g : α → ∀ (x : ℕ), x < n → β} :
+  f ∈ₑ C → (λ (a : α) (b : {x // x < n}), g a b b.prop) ∈ₑ C →
+  @complexity_class.mem _ _ (α → β) _ _ _ (λ x, @fin.rec n (λ _, β) (g x) (f x)) C
+| ⟨f', pf, hf⟩ ⟨g', pg, hg⟩ := ⟨λ x, g' (x △ (f' x)), by complexity, λ x, begin
+  dsimp [has_uncurry.uncurry] at hg hf ⊢,
+  cases H : f x with v hv, specialize hg (x, ⟨v, hv⟩),
+  simp [tencodable.encode_prod] at hg,
+  simpa [hf, H] using hg,
+end⟩
+
+@[complexity] lemma vector_to_list {n} : (vector.to_list : vector α n → list α) ∈ₑ C :=
+subtype_coe
+
+@[complexity] lemma vector_head {n} : (@vector.head α n) ∈ₑ C :=
+by { rw of_some, simp_rw ← vector.head'_to_list, complexity, }
+
+@[complexity] lemma vector_tail {n} : (@vector.tail α n) ∈ₑ C :=
+by { complexity using λ l, subtype.mk l.to_list.tail (by simp), rcases l with ⟨_|_, _⟩; refl, }
+
+@[complexity] lemma vector_cons {n} : (@vector.cons α n) ∈ₑ C :=
+by { complexity using λ x v, ⟨x :: v.to_list, by simp⟩, cases v, refl, }
+
+@[complexity] lemma vector_nth {n} : (@vector.nth α n) ∈ₑ C :=
+begin
+  rw [mem.swap_args₂, iff_fintype],
+  intro i, rw of_some,
+  convert (const_list_nth i).comp vector_to_list,
+  ext x : 1, simp [flip, vector.nth_eq_nth_le,  list.some_nth_le_eq],
+end
+
+lemma of_fn {n : ℕ} {f : fin n → α → β} (hf : ∀ i, (f i) ∈ₑ C) :
+  (λ x, vector.of_fn (λ i, f i x)) ∈ₑ C :=
+begin
+  induction n with n ih, { exact C.const vector.nil, },
+  exact vector_cons.comp₂ (hf 0) (ih $ λ i, hf i.succ),
+end
+
+end subtype
+
+section setoid
+variables {h : setoid α} {out : quotient h → α} {hout : function.left_inverse quotient.mk out}
+
+include h out hout C
+
+lemma setoid_out : by haveI : tencodable (quotient h) := setoid.tencodable h out hout; exact out ∈ₑ C :=
+⟨_, C.id, λ x, rfl⟩
+
+end setoid
+
+section multiset
+
+@[complexity] lemma multiset_sort : multiset.sort (@tencodable.lift_le α _) ∈ₑ C := setoid_out
+
+end multiset
 
 end complexity_class
 

@@ -170,7 +170,7 @@ lemma encode_nat_eq_iterate (n : ℕ) :
 by { induction n; simp [*, function.iterate_succ', encode_zero, encode_succ], }
 
 @[simp] lemma encode_num_nodes (n : ℕ) : (encode n).num_nodes = n :=
-by induction n; simp [*, encode_zero, encode_succ]
+option.some_injective _ (tencodable.encodek n)
 
 end nat
 
@@ -216,10 +216,12 @@ end sum
 
 section subtype
 
-instance (P : α → Prop) [decidable_pred P] : tencodable {x // P x} :=
+instance subtype.tencodable (P : α → Prop) [decidable_pred P] : tencodable {x // P x} :=
 { encode := λ x, encode (x : α),
   decode := λ x, (decode α x).bind (λ r, if h : P r then some ⟨r, h⟩ else none),
   encodek := λ x, by simpa [imp_false] using x.prop }
+
+instance {n} : tencodable (vector α n) := subtype.tencodable _
 
 end subtype
 
@@ -245,5 +247,35 @@ instance : fintype ordering := fintype.of_equiv _ ordering.equiv_sign.symm
 noncomputable instance ordering.tencodable : tencodable ordering := fintype.tencodable
 
 end ordering
+
+section quotient
+
+def _root_.setoid.tencodable (h : setoid α) (out : quotient h → α) (hout : function.left_inverse quotient.mk out) :
+  tencodable (quotient h) := of_left_inverse out quotient.mk hout
+
+end quotient
+
+section finset
+
+def lift_le : α → α → Prop := λ x y, encode x ≤ encode y
+
+local attribute [reducible] lift_le
+instance : decidable_rel (@lift_le α _) := infer_instance
+local attribute [semireducible] lift_le
+
+instance : is_linear_order α lift_le :=
+@has_le.le.is_linear_order α (linear_order.lift' encode encode_injective)
+
+instance : tencodable (multiset α) :=
+(list.is_setoid α).tencodable (multiset.sort lift_le) (multiset.sort_eq _)
+
+instance [decidable_eq α] : tencodable (finset α) :=
+of_equiv {val : multiset α // val.nodup}
+{ to_fun := λ x, ⟨x.1, x.2⟩,
+  inv_fun := λ x, ⟨x.1, x.2⟩,
+  left_inv := by rintro ⟨x, h⟩; refl,
+  right_inv := by rintro ⟨x, h⟩; refl }
+
+end finset
 
 end tencodable
