@@ -41,12 +41,28 @@ begin
   complexity using λ x y, x.stack_rec (λ y' : tree unit, (y' = tree.nil : bool))
     (λ _ _ y', y'.left) (λ _ _ y', y'.right)
     (λ b₁ b₂ _ _ y, !(y = tree.nil : bool) && (b₁ && b₂)) y,
-  { use 0, simpa using tree.left_num_nodes_le, }, { use 0, simpa using tree.right_num_nodes_le, }, { use 0, simp, },
+  { use 0, simp, },
   induction x using tree.unit_rec_on with l r ih₁ ih₂ generalizing y; cases y; simp [*],
 end
 
 @[complexity] lemma eq : (@eq α) ∈ₚ PTIME :=
 by { have := tree_eq, complexity using (λ x y, encode x = encode y), simp, }
+
+@[complexity] lemma tree_cmp : (@tree.cmp unit _ _) ∈ₑ PTIME :=
+begin
+  complexity using λ x y,
+    x.stack_rec (λ y', if y' = tree.nil then ordering.eq else ordering.lt)
+      (λ _ _ y', y'.left) (λ _ _ y', y'.right)
+      (λ c₁ c₂ _ _ y', if y' = tree.nil then ordering.gt else c₁.or_else c₂) y,
+  { use 0, simp, },
+  induction x using tree.unit_rec_on with l r ih₁ ih₂ generalizing y; rcases y with _|⟨⟨⟩, _, _⟩; simp [*, tree.cmp, ordering.or_else],
+end
+
+@[complexity] lemma tree_lt : ((<) : tree unit → tree unit → Prop) ∈ₚ PTIME :=
+by { complexity using λ x y, x.cmp y = ordering.lt, rw tree.tree_lt_def, }
+
+@[complexity] lemma tree_le : ((≤) : tree unit → tree unit → Prop) ∈ₚ PTIME :=
+by { complexity using λ x y, ¬(y < x), simp, }
 
 end stack_rec
 
@@ -175,7 +191,7 @@ begin
   simp [list.init_cons_of_ne_nil (list.ne_nil_of_length_eq_succ $ list.length_tails _), ih],
 end
 
-theorem list_stack_rec {ls : δ → list γ} {base : δ → α → β} {pre : δ → γ → list γ → α → α}
+@[complexity] theorem list_stack_rec [polysize α] [polysize β] [polysize γ] [polysize δ] {ls : δ → list γ} {base : δ → α → β} {pre : δ → γ → list γ → α → α}
   {post : δ → β → γ → list γ → α → β} {arg : δ → α} (hls : ls ∈ₑ PTIME) (hb : base ∈ₑ PTIME)
   (hpre : pre ∈ₑ PTIME) (hpost : post ∈ₑ PTIME) (harg : arg ∈ₑ PTIME)
   (hpre' : polysize_safe (λ (usf : δ × γ × list γ) (sf : α), pre usf.1 usf.2.1 usf.2.2 sf))
@@ -189,6 +205,34 @@ begin
   complexity, { apply polysize_safe.comp₄_3, complexity, },
   { apply polysize_safe.comp₅_1, complexity, },
 end
+
+@[complexity] lemma repeat : (@list.repeat α) ∈ₑ PTIME :=
+by { complexity using λ x n, (list.cons x)^[n] [], induction n; simp [iterate_succ', *], }
+
+@[complexity] lemma nat_stack_rec {n : γ → ℕ} {base : γ → α → β} {pre : γ → ℕ → α → α} {post : γ → β → ℕ → α → β}
+  {arg : γ → α}  (hn : n ∈ₑ PTIME) (hb : base ∈ₑ PTIME) (hpr : pre ∈ₑ PTIME) (hpo : post ∈ₑ PTIME)
+  (harg : arg ∈ₑ PTIME) (hpr : polysize_safe (λ (usf : γ × ℕ) (sf : α), pre usf.1 usf.2 sf))
+  (hpo' : polysize_safe (λ (usf : γ × ℕ × α) (sf : β), post usf.1 sf usf.2.1 usf.2.2)) : (λ x, (n x).stack_rec (base x) (pre x) (post x) (arg x)) ∈ₑ PTIME :=
+begin
+  complexity using λ x, (list.repeat () $ n x).stack_rec (base x) (λ _ tl y, pre x tl.length y)
+    (λ ih _ tl y, post x ih tl.length y) (arg x),
+  { apply polysize_safe.comp₃_2, complexity, },
+  { apply polysize_safe.comp₄_1, complexity, },
+  generalize : arg x = y, induction n x with n ih generalizing y,
+  { simp, }, { simp [ih], },
+end
+
+@[complexity] lemma list_ordered_insert {r : γ → α → α → Prop} [∀ x, decidable_rel (r x)] {a : γ → α} {ls : γ → list α} (hr : r ∈ₚ PTIME)
+  (he : a ∈ₑ PTIME) (hls : ls ∈ₑ PTIME) : (λ x, (ls x).ordered_insert (r x) (a x)) ∈ₑ PTIME :=
+begin
+  complexity using λ x, (ls x).stack_rec (λ _ : unit, [a x]) (λ _ _ _, ())
+    (λ ih b l _, if r x (a x) b then a x :: b :: l else b :: ih) (),
+  induction ls x; simp [*],
+end
+
+@[complexity] lemma list_insertion_sort {r : γ → α → α → Prop} [∀ x, decidable_rel (r x)] {a : γ → α} {ls : γ → list α} (hr : r ∈ₚ PTIME)
+  (he : a ∈ₑ PTIME) (hls : ls ∈ₑ PTIME) : (λ x, (ls x).insertion_sort (r x)) ∈ₑ PTIME :=
+by { complexity using λ x, (ls x).foldr (λ b ih, list.ordered_insert (r x) b ih) [], induction ls x; simp [*], }
 
 end list
 

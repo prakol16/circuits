@@ -1,6 +1,7 @@
 import data.list.basic
 import data.polynomial.eval
 import data.mv_polynomial.basic
+import order.compare
 import tree
 
 namespace list
@@ -122,3 +123,67 @@ by simp [last'_eq_last_of_ne_nil (ne_nil_of_length_eq_succ (l.length_scanl x)), 
   l.reverse.head' = l.last' := by simpa [eq_comm] using l.reverse.reverse_last'
 
 end list
+
+namespace tree
+variables {α : Type*}
+
+protected def cmp [has_lt α] [decidable_rel ((<) : α → α → Prop)] : tree α → tree α → ordering
+| tree.nil tree.nil := ordering.eq
+| tree.nil (tree.node _ _ _) := ordering.lt
+| (tree.node _ _ _) tree.nil := ordering.gt
+| (tree.node x₁ a₁ b₁) (tree.node x₂ a₂ b₂) :=
+  (_root_.cmp x₁ x₂).or_else ((cmp a₁ a₂).or_else (cmp b₁ b₂))
+
+instance [has_lt α] : has_lt (tree α) :=
+{ lt := λ a b, by classical; exact a.cmp b = ordering.lt }
+
+lemma tree_lt_def [has_lt α] [decidable_rel ((<) : α → α → Prop)] (x y : tree α) :
+  x < y ↔ x.cmp y = ordering.lt := by convert iff.rfl
+
+@[simp] lemma _root_.ordering.or_else_eq_eq_iff (x y : ordering) :
+  x.or_else y = ordering.eq ↔ x = ordering.eq ∧ y = ordering.eq :=
+by cases x; cases y; simp [ordering.or_else]
+
+@[simp] lemma tree_cmp_eq_eq_iff [linear_order α] {x y : tree α} : x.cmp y = ordering.eq ↔ x = y :=
+begin
+  induction y generalizing x;
+  cases x;
+  simp [tree.cmp, *],
+end
+
+@[simp] lemma tree_cmp_swap [linear_order α] {x y : tree α} : (x.cmp y).swap = y.cmp x :=
+begin
+  induction y generalizing x;
+  cases x;
+  simp [tree.cmp, ordering.swap, ordering.swap_or_else, *],
+end
+
+@[simp] lemma tree_cmp_eq_gt_iff [linear_order α] {x y : tree α} : (x.cmp y) = ordering.gt ↔ (y.cmp x) = ordering.lt :=
+by { split; intro h; apply_fun ordering.swap at h; simpa using h, }
+
+lemma tree_cmp_compares [linear_order α] (x y : tree α) : (x.cmp y).compares x y :=
+by { cases H : x.cmp y; simp [tree_lt_def, *] at *, }
+
+instance [linear_order α] : is_strict_order (tree α) (<) :=
+{ irrefl := λ x, by simp [tree_lt_def, tree_cmp_eq_eq_iff.mpr rfl],
+  trans := λ a b c h₁ h₂, begin
+    induction c with xc lc rc ih₁ ih₂ generalizing a b,
+    { exfalso, cases b; exact ordering.no_confusion h₂, },
+    cases a with xa la ra, { exact rfl, },
+    cases b with xb lb rb, { exfalso, exact ordering.no_confusion h₁, },
+    simp [tree_lt_def, cmp_eq_lt_iff, tree.cmp, ordering.or_else_eq_lt, tree_cmp_eq_eq_iff] at *,
+    rcases h₁ with h₁|⟨rfl, h₁⟩, { left, exact lt_of_lt_of_le h₁ (le_of_lt_or_eq $ h₂.imp_right and.left), },
+    refine h₂.imp_right _, clear h₂, rintro ⟨rfl, h₂⟩, refine ⟨rfl, _⟩,
+    rcases h₁ with h₁|⟨rfl, h₁⟩, 
+    { left, rcases h₂ with h₂|⟨rfl, h₂⟩, { exact ih₁ _ _ h₁ h₂, }, exact h₁, },
+    refine h₂.imp_right _, clear h₂, rintro ⟨rfl, h₂⟩, 
+    exact ⟨rfl, ih₂ _ _ h₁ h₂⟩,
+  end }
+
+instance [linear_order α] : preorder (tree α) :=
+@partial_order.to_preorder _ (partial_order_of_SO (<))
+
+instance [linear_order α] : linear_order (tree α) :=
+linear_order_of_compares tree.cmp tree_cmp_compares
+
+end tree

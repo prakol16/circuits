@@ -227,6 +227,14 @@ by { complexity using (λ x, g x (f x).1 (f x).2), cases f x; refl, }
 
 end prod
 
+section ordering
+
+@[complexity] lemma ordering_swap : ordering.swap ∈ₑ C := of_from_fintype' _
+
+@[complexity] lemma ordering_or_else : ordering.or_else ∈ₑ C := of_from_fintype' _
+
+end ordering
+
 section list
 
 @[complexity] lemma list_cases {f : α → list β} {g : α → γ} {h : α → β → list β → γ} :

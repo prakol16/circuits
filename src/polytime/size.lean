@@ -135,7 +135,6 @@ by { simp [size], abel, }
 @[simp] lemma size_reverse (x : list α) : size x.reverse = size x :=
 by simp [size, list.sum_reverse]
 
-
 lemma list.size_le_mul_of_le (a b : ℕ) (l : list α)
   (h₁ : l.length ≤ a) (h₂ : ∀ x ∈ l, size x ≤ b) :
   size l ≤ a * (b + 1) :=
@@ -144,6 +143,9 @@ begin
   refine add_le_add h₁ ((list.sum_le_card_nsmul _ b _).trans _),
   { simpa using h₂, }, { simpa using mul_le_mul_right' h₁ b, }
 end
+
+lemma list.perm.size_eq {l₁ l₂ : list α} (h : l₁ ~ l₂) : size l₁ = size l₂ :=
+by simp only [size, h.length_eq, (h.map size).sum_eq]
 
 instance : polysize (α ⊕ β) :=
 { size := λ x, x.elim size size,
@@ -244,12 +246,24 @@ hf.comp (show polysize_fun (default : α → unit), from ⟨0, by simp⟩) hg
   polysize_safe (λ (x : α) (y : β), (f x) :: (g x y)) :=
 by { apply polysize_safe.comp _ hf hg, use polynomial.X + 1, intros, apply le_of_eq, simp, abel, }
 
+@[complexity] theorem polysize_safe.ordered_insert (r : α → γ → γ → Prop) [∀ x, decidable_rel (r x)] {f : α → γ} {g : α → β → list γ} (hf : polysize_fun f) (hg : polysize_safe g) :
+  polysize_safe (λ x y, (g x y).ordered_insert (r x) (f x)) :=
+by { cases hf with pf hf, cases hg with pg hg, use pg + pf + 1, intros x y, simp [← add_assoc, ((g x y).perm_ordered_insert (r x) (f x)).size_eq], rw add_comm, mono*, }
+
 @[complexity] theorem polysize_safe.const (C : γ) : polysize_safe (λ (_ : α) (_ : β), C) :=
 ⟨polynomial.C (size C), λ x y, by simp⟩
 
 @[complexity] theorem polysize_safe.fst {f : α → β → γ × δ} (hf : polysize_safe f) :
   polysize_safe (λ x y, (f x y).1) :=
 by { refine polysize_safe.comp' _ hf, use 0, simp, }
+
+@[complexity] theorem polysize_safe.left {f : α → β → tree unit} (hf : polysize_safe f) :
+  polysize_safe (λ x y, (f x y).left) :=  
+by { refine polysize_safe.comp' _ hf, use 0, simpa using tree.left_num_nodes_le, }
+
+@[complexity] theorem polysize_safe.right {f : α → β → tree unit} (hf : polysize_safe f) :
+  polysize_safe (λ x y, (f x y).right) :=  
+by { refine polysize_safe.comp' _ hf, use 0, simpa using tree.right_num_nodes_le, }
 
 @[complexity] theorem polysize_safe.snd {f : α → β → γ × δ} (hf : polysize_safe f) :
   polysize_safe (λ x y, (f x y).2) :=
@@ -331,6 +345,16 @@ variables {α₀ α₁ α₂ α₃ α₄ α₅ α₆ : Type*}
 -- Convention: compₙ_i₁... means composition of `n`-ary function where i₁, i₂, are safe indices
 -- TODO automate
 
+theorem polysize_safe.comp₃_2 {f : α₀ → α₁ → α₂ → γ}
+  {g₀ : α → α₀} {g₁ : α → α₁} {g₂ : α → β → α₂} :
+  polysize_safe (λ (usf : α₀ × α₁) (sf : α₂), f usf.1 usf.2 sf) → 
+  polysize_fun g₀ → polysize_fun g₁ → polysize_safe g₂ →
+  polysize_safe (λ x y, f (g₀ x) (g₁ x) (g₂ x y))
+| ⟨pf, hf⟩ ⟨p₀, h₀⟩ ⟨p₁, h₁⟩ ⟨p₂, h₂⟩ := ⟨p₂ + pf.comp (p₀ + p₁), 
+  λ x y, by { refine (hf (g₀ x, g₁ x) (g₂ x y)).trans _, simp [← add_assoc], mono*, }⟩
+
+
+
 theorem polysize_safe.comp₄_1 {f : α₀ → α₁ → α₂ → α₃ → γ}
   {g₀ : α → α₀} {g₁ : α → β → α₁} {g₂ : α → α₂} {g₃ : α → α₃} :
   polysize_safe (λ (usf : α₀ × α₂ × α₃) (sf : α₁), f usf.1 sf usf.2.1 usf.2.2) → 
@@ -338,6 +362,15 @@ theorem polysize_safe.comp₄_1 {f : α₀ → α₁ → α₂ → α₃ → γ}
   polysize_safe (λ x y, f (g₀ x) (g₁ x y) (g₂ x) (g₃ x))
 | ⟨pf, hf⟩ ⟨p₀, h₀⟩ ⟨p₁, h₁⟩ ⟨p₂, h₂⟩ ⟨p₃, h₃⟩ := ⟨p₁ + pf.comp (p₀ + p₂ + p₃), 
   λ x y, by { refine (hf (g₀ x, g₂ x, g₃ x) (g₁ x y)).trans _, simp [← add_assoc], mono*, }⟩
+
+theorem polysize_safe.comp₄_2 {f : α₀ → α₁ → α₂ → α₃ → γ}
+  {g₀ : α → α₀} {g₁ : α → α₁} {g₂ : α → β → α₂} {g₃ : α → α₃} :
+  polysize_safe (λ (usf : α₀ × α₁ × α₃) (sf : α₂), f usf.1 usf.2.1 sf usf.2.2) → 
+  polysize_fun g₀ → polysize_fun g₁ → polysize_safe g₂ → polysize_fun g₃ →
+  polysize_safe (λ x y, f (g₀ x) (g₁ x) (g₂ x y) (g₃ x))
+| ⟨pf, hf⟩ ⟨p₀, h₀⟩ ⟨p₁, h₁⟩ ⟨p₂, h₂⟩ ⟨p₃, h₃⟩ := ⟨p₂ + pf.comp (p₀ + p₁ + p₃), 
+  λ x y, by { refine (hf (g₀ x, g₁ x, g₃ x) (g₂ x y)).trans _, simp [← add_assoc], mono*, }⟩
+
 
 theorem polysize_safe.comp₄_3 {f : α₀ → α₁ → α₂ → α₃ → γ}
   {g₀ : α → α₀} {g₁ : α → α₁} {g₂ : α → α₂} {g₃ : α → β → α₃} :

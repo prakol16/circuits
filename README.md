@@ -7,3 +7,6 @@
         - Also significantly more annoying to show lists etc. are polynomial-sized
   - Add complexity_class_decodable class instead of making it a class for each complexity class
     - Use abbreviations e.g. polycodable = complexity_class_decodable PTIME
+
+
+Note: › is frq

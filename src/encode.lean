@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura, Mario Carneiro
 -/
 import data.tree
+import data.sign
 import logic.equiv.basic
 import tactic.ring
 import tactic.zify
@@ -212,5 +213,37 @@ instance : tencodable (α ⊕ β) :=
   encodek := λ x, by cases x; simp }
 
 end sum
+
+section subtype
+
+instance (P : α → Prop) [decidable_pred P] : tencodable {x // P x} :=
+{ encode := λ x, encode (x : α),
+  decode := λ x, (decode α x).bind (λ r, if h : P r then some ⟨r, h⟩ else none),
+  encodek := λ x, by simpa [imp_false] using x.prop }
+
+end subtype
+
+section fin
+
+instance (n : ℕ) : tencodable (fin n) := of_equiv {k // k < n} fin.equiv_subtype
+
+noncomputable def fintype.tencodable {α : Type*} [fintype α] : tencodable α :=
+of_equiv (fin (fintype.card α)) (fintype.equiv_fin α)
+
+end fin
+
+section ordering
+
+def _root_.ordering.equiv_sign : ordering ≃ sign_type :=
+{ to_fun := λ x, by { cases x, exacts [-1, 0, 1], },
+  inv_fun := λ x, by { cases x, exacts [ordering.eq, ordering.lt, ordering.gt], },
+  left_inv := λ x, by { cases x; refl, },
+  right_inv := λ x, by { cases x; refl, } }
+
+instance : fintype ordering := fintype.of_equiv _ ordering.equiv_sign.symm
+
+noncomputable instance ordering.tencodable : tencodable ordering := fintype.tencodable
+
+end ordering
 
 end tencodable
