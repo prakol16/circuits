@@ -150,7 +150,7 @@ by { convert option_elim hf hg hh, ext x, cases f x; refl, }
 @[complexity] protected lemma some : @option.some α ∈ₑ C :=
 ⟨_, C.pair C.nil C.id, λ _, rfl⟩
 
-@[complexity] lemma succ : nat.succ ∈ₑ C := complexity_class.some
+@[complexity] lemma succ : nat.succ ∈ₑ C := complexity_class.some 
 
 lemma of_some {f : α → β} : f ∈ₑ C ↔ C.mem (λ x, some (f x)) :=
 ⟨λ hf, by complexity, λ ⟨f', pf, hf⟩, ⟨_, C.comp C.right pf, λ _, by { simp [hf], refl, }⟩⟩
@@ -256,6 +256,9 @@ by { delta list.head, clean_target, complexity, }
 
 @[complexity] lemma tail : (@list.tail α) ∈ₑ C :=
 by { delta list.tail, clean_target, complexity, }
+
+@[complexity] lemma pred : nat.pred ∈ₑ C :=
+⟨_, C.right, λ n, by cases n; simp [has_uncurry.uncurry, encode]⟩
 
 @[complexity] protected lemma equiv_list : ⇑tencodable.equiv_list ∈ₑ C :=
 ⟨_, C.id, λ x, by simp [encode, has_uncurry.uncurry]⟩ 

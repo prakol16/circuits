@@ -10,14 +10,15 @@ namespace tree
 
 inductive polytime : (tree unit → tree unit) → Prop
 | nil : polytime (λ _, nil)
+| id' : polytime id
 | left : polytime (λ x, x.left)
 | right : polytime (λ x, x.right)
 | pair {f₁ f₂} : polytime f₁ → polytime f₂ → polytime (λ x, (f₁ x) △ (f₂ x))
 | comp {f₁ f₂} : polytime f₁ → polytime f₂ → polytime (f₁ ∘ f₂)
-| prec {n f} : polytime n → polytime f →
-  -- Key condition: the growth of the output of `f` should be polynomially bounded
-  (∃ p : polynomial ℕ, ∀ x (m ≤ (n x).num_nodes), (f^[m] x).num_nodes ≤ p.eval x.num_nodes) →
-  polytime (λ x, f^[(n x).num_nodes] x)
+| ite {f g₁ g₂} : polytime f → polytime g₁ → polytime g₂ → polytime (λ x, if f x = nil then g₁ x else g₂ x)
+| bounded_rec {f} : polytime f →
+  polysize_fun (λ x : tree unit, f^[x.left.num_nodes] x.right) →
+  polytime (λ x : tree unit, f^[x.left.num_nodes] x.right)
 
 namespace polytime
 
@@ -28,13 +29,17 @@ protected theorem const : ∀ (n : tree unit), polytime (λ _, n)
 | tree.nil := nil
 | (x △ y) := (const x).pair (const y)
 
-protected theorem id : polytime (λ x, x) := prec nil left (⟨polynomial.X, λ x, by simp⟩)
+-- TODO: how to do make original lemma protected?
+protected lemma id : polytime (λ x, x) := id'
+
+@[simp] lemma uncurry_unary {α β : Type*} (f : α → β) : ↿f = f := rfl
 
 theorem num_nodes_poly {f : tree unit → tree unit} (hf : polytime f) :
-  ∃ p : polynomial ℕ, ∀ x, (f x).num_nodes ≤ p.eval x.num_nodes :=
+  polysize_fun f :=
 begin
   induction hf,
   case nil { use 0, simp, },
+  case id' { use polynomial.X, simp, },
   case left { use polynomial.X, simpa using left_num_nodes_le, },
   case right { use polynomial.X, simpa using right_num_nodes_le, },
   case pair : f₁ f₂ _ _ ih₁ ih₂
@@ -48,28 +53,8 @@ begin
     intro x,
     simp only [comp_app, polynomial.eval_comp],
     exact (ih₁ _).trans (P₁.eval_mono (ih₂ x)), },
-  case prec : n f _ _ H _ _
-  { rcases H with ⟨Pb, hPb⟩,
-    exact ⟨Pb, λ x, hPb x _ rfl.le⟩, }
-end
-
-protected theorem ite {f g₁ g₂} (hf : polytime f) (hg₁ : polytime g₁) (hg₂ : polytime g₂) :
-  polytime (λ x, if f x = tree.nil then g₁ x else g₂ x) :=
-(left.comp ((prec (hf.comp right) (pair (hg₂.comp right) right) begin
-  obtain ⟨P, hP⟩ := hg₂.num_nodes_poly,
-  use P + polynomial.X + 1,
-  rintros x (_|m) _,
-  { simpa using nat.le_succ_of_le le_add_self, },
-  { rw [iterate_succ, comp_app, iterate_fixed],
-    { simp only [polynomial.eval_X, num_nodes, polynomial.eval_one, comp_app, polynomial.eval_add], mono*, 
-      { exact (hP _).trans (P.eval_mono $ right_num_nodes_le _), },
-      exact right_num_nodes_le _, },
-    { simp, } }
-end).comp (pair hg₁ polytime.id))).of_eq
-begin
-  intro x, cases H : f x, { simp [H], },
-  simp only [H, comp_app, tree.right, num_nodes, iterate_succ],
-  rw iterate_fixed; simp,
+  case ite : f g₁ g₂ _ _ _ _ ih₁ ih₂ { exact polysize_fun.ite ih₁ ih₂, },
+  case bounded_rec : _ _ H { exact H, }
 end
 
 end polytime
@@ -141,6 +126,113 @@ namespace polytime
 
 section iterate
 
+lemma nil_node_iterate (n : ℕ) (y : tree unit) : ((λ x, tree.nil △ x)^[n] y).num_nodes = y.num_nodes + n :=
+by { induction n; simp [function.iterate_succ', *], refl, }
+
+@[complexity] lemma num_nodes : (@tree.num_nodes unit) ∈ₑ PTIME :=
+⟨_, (tree.polytime.bounded_rec (tree.polytime.pair tree.polytime.nil tree.polytime.id) (⟨polynomial.X, (λ x, by { simp [nil_node_iterate], rw add_comm, cases x; simp, })⟩)).comp (tree.polytime.pair tree.polytime.id tree.polytime.nil),
+  λ x, by simp [encode_nat_eq_iterate]⟩
+
+instance : polycodable ℕ :=
+⟨complexity_class.some.comp polytime.num_nodes⟩
+
+theorem iterate_safe_aux {n : tree unit → ℕ} {f : tree unit → tree unit → tree unit} {st : tree unit → tree unit}
+  (hn : n ∈ₑ PTIME) (hf : f ∈ₑ PTIME) (hst : st ∈ₑ PTIME)
+  (hf' : polysize_safe f) : (λ x, (f x)^[n x] (st x)) ∈ₑ PTIME :=
+begin
+  set F : tree unit → tree unit := λ x, x.left △ (f x.left x.right),
+  have hF : tree.polytime F := by { dsimp [F], complexity, },
+  have hF' : ∀ n x y, F^[n] (x △ y) = x △ ((f x)^[n] y),
+  { intros n x y, induction n generalizing y; simp [F, *], }, 
+  rcases hn with ⟨n', pn, hn⟩, rcases hst with ⟨st', pst, hst⟩,
+  refine ⟨_, tree.polytime.right.comp ((tree.polytime.bounded_rec hF _).comp
+    (tree.polytime.pair pn (tree.polytime.pair tree.polytime.id pst))), _⟩,
+  swap, { intro x, simp only [encode_unit_tree] at hn hst, simp [hF', hn, hst], },
+  use polynomial.X + polynomial.X * hf'.poly,
+  rintro (_|⟨⟨⟩, n, (_|⟨⟨⟩, x, y⟩)⟩), { simp, }, swap,
+  { transitivity x.num_nodes + (y.num_nodes + n.num_nodes * (hf'.poly.eval x.num_nodes)) + 1,
+    { simpa [hF'] using hf'.size_le n.num_nodes x y, }, 
+    { have : hf'.poly.eval x.num_nodes ≤ hf'.poly.eval (n.num_nodes + (x.num_nodes + (y.num_nodes + 2))) := hf'.poly.eval_mono (le_add_left $ le_self_add),
+      { simp [add_assoc],
+        refine (le_add_left $ add_le_add_left (add_le_add_left (le_add_left $ _) _) _), conv_lhs { rw add_comm, },
+        refine add_le_add_left (mul_le_mul' le_self_add this) _,  }, } },
+  { -- TODO: write this (and the one above) well; why doesn't linarith work??
+    dsimp, cases n.num_nodes with n, { simp, },
+    convert_to ((f tree.nil)^[n+1] tree.nil).num_nodes + 1 ≤ _, { simp [F, hF'], },
+    rw nat.succ_le_iff,
+    have := (hf'.size_le (n + 1) tree.nil tree.nil), refine lt_of_le_of_lt this _,
+    rw ← nat.succ_le_iff,
+    simp, rw [nat.succ_eq_one_add, add_assoc], refine le_add_left (add_le_add_left (mul_le_mul' le_self_add (hf'.poly.eval_mono zero_le')) _), }
+end
+
+local attribute [complexity] iterate_safe_aux
+
+@[complexity] lemma nat_add : ((+) : ℕ → ℕ → ℕ) ∈ₑ PTIME :=
+by { complexity using λ m n, ((encode m) △ (encode n)).num_nodes.pred, simp, }
+
+@[complexity] lemma nat_mul : ((*) : ℕ → ℕ → ℕ) ∈ₑ PTIME :=
+begin
+  refine ⟨λ x, ((λ acc : tree unit, encode (x.left.num_nodes + acc.num_nodes))^[x.right.num_nodes] tree.nil), by complexity, _⟩,
+  rintro ⟨m, n⟩,
+  suffices : ((λ acc, encode (m + acc.num_nodes))^[n] tree.nil) = encode (m * n), { simpa [encode_prod], },
+  induction n with n ih, { simp [encode], },
+  simp [iterate_succ_apply', ih, nat.mul_succ, add_comm],
+end
+
+lemma encode_pred (n : ℕ) : encode n.pred = (encode n).right :=
+by { cases n; simp [encode], }
+
+@[complexity] lemma nat_tsub : (has_sub.sub : ℕ → ℕ → ℕ) ∈ₑ PTIME :=
+begin
+  refine ⟨λ x, tree.right^[x.right.num_nodes] x.left, by complexity, _⟩,
+  rintro ⟨m, n⟩,
+  suffices : (tree.right^[n] (encode m)) = encode (m - n), { simpa [encode_prod], },
+  induction n with n ih, { simp, }, { simp [iterate_succ_apply', ih, nat.sub_succ, encode_pred], }
+end
+
+/-- For any fixed polynomial `p`, `p.eval` runs in polynomial time -/
+lemma polynomial_eval (p : polynomial ℕ) :
+  polytime.mem (λ n : ℕ, p.eval n) :=
+begin
+  induction p using polynomial.induction_on with p p q ih₁ ih₂ p q ih,
+  { simpa using polytime.const _, },
+  { simpa using nat_add.comp₂ ih₁ ih₂, },
+  simpa [pow_add, ← mul_assoc] using nat_mul.comp₂ ih polytime.id',
+end
+
+@[complexity] lemma polynomial_eval' (p : polynomial ℕ) {f : α → ℕ} (hf : f ∈ₑ PTIME) :
+  polytime.mem (λ x, p.eval (f x)) := (polynomial_eval p).comp hf
+
+
+@[complexity] lemma nat_le : polytime.mem_pred ((≤) : ℕ → ℕ → Prop) :=
+by { complexity using (λ x y, x - y = 0), rw tsub_eq_zero_iff_le, }
+
+@[complexity] lemma nat_lt : polytime.mem_pred ((<) : ℕ → ℕ → Prop) :=
+by { complexity using (λ x y, x ≤ y ∧ ¬(y ≤ x)), rw lt_iff_le_not_le, }
+
+/- We now prove that `it` is unconditionally true. The crucial ingredients are:
+  - We can evaluate polynomials in polynomial time
+  - We can prove `tree.guard_size`, which is the identity on trees
+    whose size is less than `n` but otherwise returns a constant garbage value (`nil`),
+    runs in polynomial time.
+  
+Combining these allows us to iterate a function which automatically exits when it takes too long.
+Thus, even on "bad" inputs, it does not take more than polynomial time.
+-/
+
+def tree.guard_size (x : tree unit) (n : ℕ) : tree unit :=
+if x.num_nodes ≤ n then x else tree.nil
+
+@[complexity] lemma tree_guard_size : tree.guard_size ∈ₑ PTIME :=
+by { delta tree.guard_size, complexity, }
+
+lemma tree.guard_size_num_nodes_le (x : tree unit) (n) : (x.guard_size n).num_nodes ≤ n :=
+by { simp only [tree.guard_size], split_ifs, { assumption, }, exact zero_le', }
+
+lemma tree.guard_size_pos (x : tree unit) {n} (h : x.num_nodes ≤ n) : x.guard_size n = x :=
+by rwa [tree.guard_size, if_pos]
+
+#exit
 /- Our goal in this section is to show that polynomial iteration runs
   in polynomial time, subject to constraints on the state size not blowing up.
   
@@ -292,9 +384,6 @@ end
 
 @[complexity] lemma polynomial_eval' (p : polynomial ℕ) {f : α → ℕ} (hf : f ∈ₑ PTIME) :
   polytime.mem (λ x, p.eval (f x)) := (polynomial_eval p).comp hf
-
-@[complexity] lemma pred : nat.pred ∈ₑ PTIME :=
-⟨_, tree.polytime.right, λ n, by cases n; refl⟩
 
 @[complexity] lemma tsub : (@has_sub.sub ℕ _) ∈ₑ PTIME :=
 by { complexity using (λ x y, nat.pred^[y] x), { use 0, simpa using nat.pred_le, }, rw nat.pred_iterate, }

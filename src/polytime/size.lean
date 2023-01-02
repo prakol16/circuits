@@ -225,9 +225,25 @@ theorem polysize_fun.fst : polysize_fun (@prod.fst α β) :=
 theorem polysize_fun.snd : polysize_fun (@prod.snd α β) :=
 ⟨polynomial.X, λ ⟨x, y⟩, by { simp [has_uncurry.uncurry], }⟩
 
+theorem polysize_fun.ite {P : α → Prop} [decidable_pred P] {f₁ f₂ : α → β} :
+  polysize_fun f₁ → polysize_fun f₂ → polysize_fun (λ x, if P x then f₁ x else f₂ x)
+| ⟨p₁, h₁⟩ ⟨p₂, h₂⟩ := ⟨p₁ + p₂, λ x, begin
+  dsimp only [has_uncurry.uncurry, id],
+  split_ifs, { refine (h₁ x).trans _, simp, }, { refine (h₂ x).trans _, simp, }
+end⟩
+
 @[expand_exists polysize_safe.poly polysize_safe.spec]
 lemma polysize_safe.def {f : α → β → γ} (hf : polysize_safe f) :
   ∃ (p : polynomial ℕ), ∀ x y, size (f x y) ≤ size y + p.eval (size x) := hf
+
+theorem polysize_safe.size_le {f : α → β → β} (hf : polysize_safe f) (n : ℕ) (x : α) (y : β) :
+  size ((f x)^[n] y) ≤ size y + n * (hf.poly.eval $ size x) :=
+begin
+  induction n with n ih generalizing y, { simp, },
+  rw [iterate_succ_apply, nat.succ_mul, nat.add_comm _  (hf.poly.eval (size x)), ← add_assoc],
+  refine (ih _).trans _,
+  simpa using hf.spec x y,
+end
 
 theorem polysize_safe.iterate_invariant {f : α → β → β} {n : α → ℕ}  (inv : α → β → Prop)
   (hinv : ∀ x y, inv x y → inv x (f x y))
@@ -288,6 +304,14 @@ by { cases hf with pf hf, cases hg with pg hg, use pg + pf + 1, intros x y, simp
 
 @[complexity] theorem polysize_safe.const (C : γ) : polysize_safe (λ (_ : α) (_ : β), C) :=
 ⟨polynomial.C (size C), λ x y, by simp⟩
+
+@[complexity] theorem polysize_nat_encode {f : α → β → ℕ} :
+  polysize_safe f → polysize_safe (λ x y, encode (f x y))
+| ⟨p, hp⟩ := ⟨p, by simpa using hp⟩
+
+@[complexity] theorem polysize_num_nodes {f : α → β → tree unit} :
+  polysize_safe f → polysize_safe (λ x y, (f x y).num_nodes)
+| ⟨p, hp⟩ := ⟨p, by simpa using hp⟩
 
 @[complexity] theorem polysize_safe.fst {f : α → β → γ × δ} (hf : polysize_safe f) :
   polysize_safe (λ x y, (f x y).1) :=
