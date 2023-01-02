@@ -348,7 +348,7 @@ begin
   ext x : 1, simp [flip, vector.nth_eq_nth_le,  list.some_nth_le_eq],
 end
 
-lemma of_fn {n : ℕ} {f : fin n → α → β} (hf : ∀ i, (f i) ∈ₑ C) :
+@[complexity] lemma of_fn {n : ℕ} {f : fin n → α → β} (hf : ∀ i, (f i) ∈ₑ C) :
   (λ x, vector.of_fn (λ i, f i x)) ∈ₑ C :=
 begin
   induction n with n ih, { exact C.const vector.nil, },

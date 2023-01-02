@@ -135,6 +135,9 @@ by { simp [size], abel, }
 @[simp] lemma size_reverse (x : list α) : size x.reverse = size x :=
 by simp [size, list.sum_reverse]
 
+@[simp] lemma size_list_fintype {α : Type*} [tencodable α] [fintype α] (x : list α) :
+  size x = x.length := by simp [size]
+
 lemma list.size_le_mul_of_le (a b : ℕ) (l : list α)
   (h₁ : l.length ≤ a) (h₂ : ∀ x ∈ l, size x ≤ b) :
   size l ≤ a * (b + 1) :=
@@ -167,6 +170,22 @@ instance : polysize (α ⊕ β) :=
 @[simp] lemma size_inl (x : α) : size (sum.inl x : α ⊕ β) = size x := rfl
 @[simp] lemma size_inr (x : β) : size (sum.inr x : α ⊕ β) = size x := rfl
 
+instance {n : ℕ} : polysize (vector α n) :=
+{ size := λ v, (v.map size).to_list.sum,
+  upper := begin
+    obtain ⟨p, hp⟩ := polysize.upper (list α),
+    refine ⟨p, λ x, trans _ (hp x.to_list)⟩,
+    simp only [size, vector.to_list_map],
+    exact le_add_self,
+  end,
+  lower := begin
+    obtain ⟨p, hp⟩ := polysize.lower (list α),
+    refine ⟨p.comp (polynomial.C n + polynomial.X), λ x, (hp x.to_list).trans _⟩,
+    simp [size],
+  end }
+
+lemma polysize_vector_def {n} (v : vector α n) : size v = (v.map size).to_list.sum := rfl
+
 -- Equal to `default_polysize` but more useful defeq
 instance : polysize ℕ :=
 { size := λ n, n,
@@ -188,6 +207,23 @@ def polysize_safe (f : α → β → γ) : Prop :=
 @[expand_exists polysize_fun.poly polysize_fun.spec]
 lemma polysize_fun.def {γ : Type} [has_uncurry γ α β] {f : γ} (hf : polysize_fun f) :
   ∃ (p : polynomial ℕ), ∀ x : α, size (↿f x) ≤ p.eval (size x) := hf
+
+theorem polysize_fun.id : polysize_fun (@id α) := ⟨polynomial.X, by simp [has_uncurry.uncurry]⟩
+
+theorem polysize_fun.comp {f : α → β} {g : γ → α} : polysize_fun f → polysize_fun g → polysize_fun (f ∘ g)
+| ⟨p₁, h₁⟩ ⟨p₂, h₂⟩ := ⟨p₁.comp p₂, (λ x, by { rw polynomial.eval_comp, exact (h₁ (g x)).trans (p₁.eval_mono (h₂ x)), })⟩
+
+theorem polysize_fun.head' : polysize_fun (@list.head' α) :=
+⟨polynomial.X, λ x, by { cases x, { simp [has_uncurry.uncurry], }, simp [has_uncurry.uncurry, add_assoc], }⟩
+
+theorem polysize_fun.tail : polysize_fun (@list.tail α) :=
+⟨polynomial.X, λ x, by { cases x, { simp [has_uncurry.uncurry], }, simp [has_uncurry.uncurry], linarith only, }⟩
+
+theorem polysize_fun.fst : polysize_fun (@prod.fst α β) :=
+⟨polynomial.X, λ ⟨x, y⟩, by { simp [has_uncurry.uncurry], }⟩
+
+theorem polysize_fun.snd : polysize_fun (@prod.snd α β) :=
+⟨polynomial.X, λ ⟨x, y⟩, by { simp [has_uncurry.uncurry], }⟩
 
 @[expand_exists polysize_safe.poly polysize_safe.spec]
 lemma polysize_safe.def {f : α → β → γ} (hf : polysize_safe f) :
@@ -285,6 +321,14 @@ by { refine polysize_safe.comp' _ hf, use 0, rintros ⟨⟩ (_|⟨hd, tl⟩); si
   polysize_safe (λ x y, (f x y).head) :=
 by { refine polysize_safe.comp' _ hf, use polynomial.C (size (default : γ)), rintros ⟨⟩ (_|⟨hd, tl⟩); simp [add_assoc], }
 
+@[complexity] theorem polysize_safe.list_split [inhabited γ] {f : α → β → list γ} : polysize_safe f →
+  polysize_safe (λ x y, ((f x y).head, (f x y).tail))
+| ⟨p, hp⟩ := ⟨p + size (default : γ), λ x y, begin
+  specialize hp x y,
+  cases H : f x y, { simp [H, ← add_assoc], },
+  simp [H] at hp ⊢, linarith only [hp],
+end⟩ 
+
 @[complexity] theorem polysize_safe.pair_left {f : α → γ} {g : α → β → δ} :
   polysize_fun f → polysize_safe g → polysize_safe (λ x y, (f x, g x y))
 | ⟨pf, hf⟩ ⟨pg, hg⟩ := ⟨pf + pg, λ x y, by { dsimp [has_uncurry.uncurry] at hf, simp, linarith only [hf x, hg x y], }⟩
@@ -337,6 +381,10 @@ by { apply polysize_safe.option_bind₁ hf, exact polysize_safe.some hg, }
   (hf : polysize_safe f) (hg : polysize_safe g) : polysize_safe (λ x y, (f x y).map (g x)) :=
 by { apply polysize_safe.option_bind₂ hf, exact polysize_safe.some hg, }
 
+@[complexity] theorem polysize_safe.get_or_else {f : α → β → option γ} {g : α → β → γ} :
+  polysize_safe f → polysize_safe g → polysize_safe (λ x y, (f x y).get_or_else (g x y))
+| ⟨pf, hpf⟩ ⟨pg, hpg⟩ := ⟨pf + pg, λ x y, by { specialize hpf x y, cases H : f x y, { simp [H], linarith only [hpg x y], }, simp [H] at hpf ⊢, linarith only [hpf], }⟩
+
 section comp
 variables {α₀ α₁ α₂ α₃ α₄ α₅ α₆ : Type*}
   [tencodable α₀] [tencodable α₁] [tencodable α₂] [tencodable α₃] [tencodable α₄] [tencodable α₅] [tencodable α₆]
@@ -345,6 +393,14 @@ variables {α₀ α₁ α₂ α₃ α₄ α₅ α₆ : Type*}
 -- Convention: compₙ_i₁... means composition of `n`-ary function where i₁, i₂, are safe indices
 -- TODO automate
 
+theorem polysize_safe.comp₃_1 {f : α₀ → α₁ → α₂ → γ}
+  {g₀ : α → α₀} {g₁ : α → β → α₁} {g₂ : α → α₂} :
+  polysize_safe (λ (usf : α₀ × α₂) (sf : α₁), f usf.1 sf usf.2) → 
+  polysize_fun g₀ → polysize_safe g₁ → polysize_fun g₂ →
+  polysize_safe (λ x y, f (g₀ x) (g₁ x y) (g₂ x))
+| ⟨pf, hf⟩ ⟨p₀, h₀⟩ ⟨p₁, h₁⟩ ⟨p₂, h₂⟩ := ⟨p₁ + pf.comp (p₀ + p₂), 
+  λ x y, by { refine (hf (g₀ x, g₂ x) (g₁ x y)).trans _, simp [← add_assoc], mono*, }⟩
+
 theorem polysize_safe.comp₃_2 {f : α₀ → α₁ → α₂ → γ}
   {g₀ : α → α₀} {g₁ : α → α₁} {g₂ : α → β → α₂} :
   polysize_safe (λ (usf : α₀ × α₁) (sf : α₂), f usf.1 usf.2 sf) → 
@@ -352,8 +408,6 @@ theorem polysize_safe.comp₃_2 {f : α₀ → α₁ → α₂ → γ}
   polysize_safe (λ x y, f (g₀ x) (g₁ x) (g₂ x y))
 | ⟨pf, hf⟩ ⟨p₀, h₀⟩ ⟨p₁, h₁⟩ ⟨p₂, h₂⟩ := ⟨p₂ + pf.comp (p₀ + p₁), 
   λ x y, by { refine (hf (g₀ x, g₁ x) (g₂ x y)).trans _, simp [← add_assoc], mono*, }⟩
-
-
 
 theorem polysize_safe.comp₄_1 {f : α₀ → α₁ → α₂ → α₃ → γ}
   {g₀ : α → α₀} {g₁ : α → β → α₁} {g₂ : α → α₂} {g₃ : α → α₃} :
@@ -398,3 +452,16 @@ theorem polysize_safe.comp₅_1 {f : α₀ → α₁ → α₂ → α₃ → α�
 
 
 end comp
+
+@[complexity] theorem polysize_safe.list_cases_on {f : α → list γ} {g : α → β → δ}
+  {h : α → β → γ → list γ → δ} (hf : polysize_fun f) (hg : polysize_safe g)
+  (hh : polysize_safe (λ (usf : α × γ × list γ) (sf : β), h usf.1 sf usf.2.1 usf.2.2)) :
+  @polysize_safe _ _ δ _ _ _ _ _ _ (λ x y, @list.cases_on _ (λ _, δ) (f x) (g x y) (h x y)) :=
+begin
+  convert_to polysize_safe (λ x y, ((f x).head'.map (λ hd, h x y hd (f x).tail)).get_or_else (g x y)),
+  { ext x y, cases f x; simp, },
+  refine polysize_safe.get_or_else _ hg,
+  refine polysize_safe.option_map₁ (polysize_fun.head'.comp hf) _,
+  exact hh.comp₄_1 polysize_fun.fst polysize_safe.id polysize_fun.snd
+    (polysize_fun.tail.comp $ hf.comp polysize_fun.fst),
+end

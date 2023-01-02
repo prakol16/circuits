@@ -234,6 +234,9 @@ end
   (he : a ∈ₑ PTIME) (hls : ls ∈ₑ PTIME) : (λ x, (ls x).insertion_sort (r x)) ∈ₑ PTIME :=
 by { complexity using λ x, (ls x).foldr (λ b ih, list.ordered_insert (r x) b ih) [], induction ls x; simp [*], }
 
+@[complexity] lemma list_append : ((++) : list α → list α → list α) ∈ₑ PTIME :=
+by { complexity using λ l₁ l₂, l₁.foldr (λ hd acc, hd :: acc) l₂, induction l₁; simp [*], }
+
 end list
 
 end polytime
