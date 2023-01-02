@@ -245,31 +245,6 @@ begin
   simpa using hf.spec x y,
 end
 
-theorem polysize_safe.iterate_invariant {f : α → β → β} {n : α → ℕ}  (inv : α → β → Prop)
-  (hinv : ∀ x y, inv x y → inv x (f x y))
-  (hf : ∃ (p : polynomial ℕ), ∀ x y, inv x y → size (f x y) ≤ size y + p.eval (size x))
-  (hn : polysize_fun n) :
-  ∃ p : mv_polynomial (fin 2) ℕ, ∀ x y (m ≤ n x), inv x y → size ((f x)^[m] y) ≤ mv_polynomial.eval ![size x, size y] p :=
-begin
-  cases hn with p hn, cases hf with q hf,
-  use (mv_polynomial.X 1 + (polynomial.to_mv 0 p) * (polynomial.to_mv 0 q) : mv_polynomial (fin 2) ℕ),
-  intros x y m hm hy, specialize hn x,
-  have : ∀ n : ℕ, size ((f x)^[n] y) ≤ size y + n * (q.eval $ size x),
-   { intro n, induction n with n ih generalizing y, 
-    { simp, },
-    rw [iterate_succ_apply, nat.succ_mul, nat.add_comm _ (q.eval (size x)), ← add_assoc],
-    refine (ih _ $ hinv x y hy).trans _,
-    simpa using hf x y hy, },
-  refine (this $ m).trans _,
-  simp, mono, exacts [hm.trans hn, zero_le'],
-end
-
-theorem polysize_safe.iterate {f : α → β → β} {n : α → ℕ}
-  (hf : polysize_safe f) (hn : polysize_fun n) :
-    ∃ p : mv_polynomial (fin 2) ℕ, ∀ x y (m ≤ n x), size ((f x)^[m] y) ≤ mv_polynomial.eval ![size x, size y] p :=
-by simpa using polysize_safe.iterate_invariant (λ _ _, true) (λ _ _ _, trivial)
-    ⟨hf.poly, λ x y _, hf.spec x y⟩ hn
-
 theorem polysize_safe.comp {f : γ → δ → ε} {g : α → γ} {h : α → β → δ} :
   polysize_safe f → polysize_fun g → polysize_safe h → polysize_safe (λ x y, f (g x) (h x y))
 | ⟨pf, hf⟩ ⟨pg, hg⟩ ⟨ph, hh⟩ :=
