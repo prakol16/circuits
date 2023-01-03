@@ -185,6 +185,7 @@ lemma polytime'_sum_parens : polytime₁' sum_parens :=
   ).of_eq $ λ v, by simp [sum_parens]
 
 
+
 end polytime'
 
 -- Plan:

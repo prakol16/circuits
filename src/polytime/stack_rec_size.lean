@@ -243,9 +243,6 @@ begin
     exact le_add_left (he.trans $ res_poly_le _ _ _ _ _ _ x), }
 end
 
-  -- suffices : size e ≤ (bdd_size_poly bb bpr₁ bpr₂ bpo).eval (size (st x, arg x)),
-  -- { refine this.trans _, clear_except hbst hbarg, simp, mono*, },
-
 include hst harg hb hpr₁ hpr₂ hpo
 
 theorem stack_step_iter_le' : ∃ (p : polynomial ℕ),
@@ -278,54 +275,3 @@ end
 end
 
 end tree
-
-
-/-
-# Theorem:
-
-Suppose
-  - `|base(a)| ≤ P₁(|a|)`,
-  - `|pre₁(left, right, a)| ≤ |a| + P₂(|left|, |right|)`
-  - `idem for pre₂, say with P₂'`
-  - `|post(ih₁, ih₂, left, right, a) ≤ |ih₁| + |ih₂| + P₃(|left|, |right|, |a|)`
-Then, if we iterate `stack_step` starting with `(x, arg, none) :: xs`, the
-size of any intermediate state (≤ x.time_steps steps later)
-is bounded by `|xs| + F(x, |arg|)` (assume `F` is mono)
-
-We should have `F(x, |arg|) ≈ `:
-    max arg that can appear: `x.depth * (P₂(x) + P₂'(x))`
-    `P₁(x.depth * (P₂(x) + P₂'(x)))` <-- max base value
-    `P₁(x.depth * (P₂(x) + P₂'(x))) + t.num_nodes * P₃(x, x.depth * (P₂(x) + P₂'(x)))`
-      <-- max result value at node `t`
-    - `P₁(x.depth * (P₂(x) + P₂'(x))) + x.num_nodes * P₃(x, x.depth * (P₂(x) + P₂'(x)))`
-
-
-Proof:
-Suppose it is true when we start with `(x, arg, none)` and `(y, arg, none)`
-Then suppose we start with `(x △ y, arg, none)`
-
-Immediately, the next step is to append `(x, pre₁ x y arg, none)` to the stack.
-After in the next `x.time_steps` steps, the `x`-portion of the stack is bounded
-by `F(|x|, |pre₁ x y arg|) ≤ F(|x|, |arg| + P₂(|x|, |y|)`
-Then, we end up with `(result: r₁) :: (x △ y, arg, none)` with `r₁ ≤ F(|x|, |arg| + P₂(|x|, |y|))`
-
-Then we turn this into `(x △ y, arg, r₁)` which expands back into
-`(y, pre₂ x y arg, none)`. Everything here is bounded by
-`F(|y|, |arg| + P₂'(|x|, |y|))` and we end up with
-`(result : r₂) :: (x △ y, arg, r₂)`, where `r₂ ≤ F(|y|, |arg| + P₂'(|x|, |y|))`
-
-When we combine these, in total, we get 
-`result = post r₁ r₂ x y arg`
-so that `|result| ≤ |r₁| + |r₂| + P₃(|x|, |y|, |arg|) ≤ F(|x|, |arg| + P₂(|x|, |y|)) + F(|y|, |arg| + P₂'(|x|, |y|)) + P₃(|x|, |y|, |arg|)`
-
-Thus, the recursive equation needed is
-
-F(|x △ y|, |arg|) ≥ F(|x|, |arg| + P₂(|x|, |y|) +
-  F(|y|, |arg| + P₂'(|x|, |y|) +
-  P₃(|x|, |y|, |arg|)
-
-
-
--/
--- 
-

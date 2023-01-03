@@ -326,7 +326,15 @@ by { refine polysize_safe.comp' _ hf, use polynomial.C (size (default : γ)), ri
   specialize hp x y,
   cases H : f x y, { simp [H, ← add_assoc], },
   simp [H] at hp ⊢, linarith only [hp],
-end⟩ 
+end⟩
+
+@[complexity] theorem polysize_safe.append_left {f : α → list γ} {g : α → β → list γ} :
+  polysize_fun f → polysize_safe g → polysize_safe (λ x y, (f x) ++ (g x y))
+| ⟨pf, hf⟩ ⟨pg, hg⟩ := ⟨pf + pg, λ x y, by { dsimp [has_uncurry.uncurry] at hf, simp, linarith only [hf x, hg x y], }⟩
+
+@[complexity] theorem polysize_safe.append_right {f : α → list γ} {g : α → β → list γ} :
+  polysize_safe g → polysize_fun f → polysize_safe (λ x y, (g x y) ++ (f x))
+|  ⟨pg, hg⟩ ⟨pf, hf⟩ := ⟨pf + pg, λ x y, by { dsimp [has_uncurry.uncurry] at hf, simp, linarith only [hf x, hg x y], }⟩
 
 @[complexity] theorem polysize_safe.pair_left {f : α → γ} {g : α → β → δ} :
   polysize_fun f → polysize_safe g → polysize_safe (λ x y, (f x, g x y))

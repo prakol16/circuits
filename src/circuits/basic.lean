@@ -152,12 +152,6 @@ by resetI; exact ⟨fc.join gc, (infer_instance : fintype (fc.δ ⊕ gc.δ)),
   fb.comp _ gb,
   by simpa [circuit_computes.join] using add_le_add hfc hgc⟩
 
-/-
-
-
-
--/
-
 lemma false.well_founded {α : Type*} : well_founded (λ (_ : α) _, false) :=
 well_founded.intro (λ a, acc.intro _ (λ _, false.elim))
 
