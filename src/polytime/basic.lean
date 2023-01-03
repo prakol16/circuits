@@ -16,9 +16,8 @@ inductive polytime : (tree unit → tree unit) → Prop
 | pair {f₁ f₂} : polytime f₁ → polytime f₂ → polytime (λ x, (f₁ x) △ (f₂ x))
 | comp {f₁ f₂} : polytime f₁ → polytime f₂ → polytime (f₁ ∘ f₂)
 | ite {f g₁ g₂} : polytime f → polytime g₁ → polytime g₂ → polytime (λ x, if f x = nil then g₁ x else g₂ x)
-| bounded_rec {f} : polytime f →
-  polysize_fun (λ x : tree unit, f^[x.left.num_nodes] x.right) →
-  polytime (λ x : tree unit, f^[x.left.num_nodes] x.right)
+| bounded_rec {f} : polytime f → polysize_fun (λ x : tree unit, f^[x.left.num_nodes] x.right) →
+    polytime (λ x : tree unit, f^[x.left.num_nodes] x.right)
 
 namespace polytime
 

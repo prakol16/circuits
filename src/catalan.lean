@@ -5,6 +5,8 @@ import data.finset.basic
 import data.finset.prod
 import algebra.big_operators
 import combinatorics.catalan
+import tactic.derive_fintype
+import data.nat.psub
 
 namespace list
 variables {α : Type*}
@@ -158,13 +160,19 @@ by cases x; simp [height]
 
 end tree
 
-@[derive [decidable_eq]]
+@[derive [fintype, decidable_eq]]
 inductive paren
 | up | down
 
 namespace paren
 
 instance : inhabited paren := ⟨up⟩
+
+@[irreducible] def to_bool : paren ≃ bool :=
+{ to_fun := λ x, by { cases x, exacts [ff, tt] },
+  inv_fun := λ x, by { cases x, exacts [up, down] },
+  left_inv := λ x, by cases x; refl,
+  right_inv := λ x, by cases x; refl }
 
 @[simp] def to_int : paren → ℤ
 | up := 1
