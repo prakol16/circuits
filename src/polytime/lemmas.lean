@@ -237,6 +237,9 @@ by { complexity using λ x, (ls x).foldr (λ b ih, list.ordered_insert (r x) b i
 @[complexity] lemma list_append : ((++) : list α → list α → list α) ∈ₑ PTIME :=
 by { complexity using λ l₁ l₂, l₁.foldr (λ hd acc, hd :: acc) l₂, induction l₁; simp [*], }
 
+@[complexity] lemma list_drop : @list.drop α ∈ₑ PTIME :=
+by { complexity using λ n l, list.tail^[n] l, simp, }
+
 end list
 
 end polytime

@@ -27,12 +27,6 @@ begin
   all_goals { sorry, }, -- complexity
 end
 
-lemma _root_.vector.nth_one_eq_tail_head {α : Type*} {n} (v : vector α (n + 2)) :
-  v.nth 1 = v.tail.head := by simp [← vector.nth_zero]
-
-@[simp] lemma _root_.vector.cons_cons_nth_one {α : Type*} {n} (v : vector α n) (a b : α) :
-  (a ::ᵥ b ::ᵥ v).nth 1 = b := by simp [vector.nth_one_eq_tail_head]
-
 abbreviation polytime₁' (f : list bool → list bool) : Prop := @polytime' 1 (λ v, f v.head)
 abbreviation polytime₂' (f : list bool → list bool → list bool) : Prop := @polytime' 2 (λ v, f v.head v.tail.head)
 
@@ -79,6 +73,9 @@ theorem polytime'_append : @polytime' 2 (λ v, v.head ++ v.tail.head) :=
 ((polytime'.nth 0).reverse.foldl ((polytime'.nth 1).cons₂ (polytime'.nth 0)) (polytime'.nth 1)
 (by { simp, complexity, })).of_eq $ λ v, by { simp [vector.nth_one_eq_tail_head], induction v.head; simp [*], }
 
+theorem append {n f g} (hf : @polytime' n f) (hg : @polytime' n g) : polytime' (λ v, (f v) ++ (g v)) :=
+polytime'.comp ![f, g] polytime'_append (λ i, by fin_cases i; simpa)
+
 theorem ite₃ {n c f g h} (hc : @polytime' n c) (hf : @polytime' n f) (hg : @polytime' n g)
   (hh : @polytime' n h) : polytime' (λ v, @list.cases_on _ (λ _, list bool) (c v) (f v) (λ hd _, if hd then g v else h v)) :=
 (@polytime'.comp n (n + 1) _ (fin.cons c (λ i v, v.nth i)) 
@@ -94,95 +91,70 @@ protected theorem ite {n c f g} (hc : @polytime' n c) (hf : @polytime' n f) (hg 
   polytime' (λ v, if (c v).head then f v else g v) :=
 (hc.ite₃ hg hf hg).of_eq $ λ v, by { rcases (c v) with (_|⟨hd, tl⟩); simp, }
 
-theorem ite_eq {n c f g} (hc : @polytime' n c) (b : bool) (hf : @polytime' n f) (hg : @polytime' n g) :
+theorem ite_head {n c f g} (hc : @polytime' n c) (b : bool) (hf : @polytime' n f) (hg : @polytime' n g) :
   polytime' (λ v, if (c v).head = b then f v else g v) :=
 by { cases b, { refine (hc.ite hg hf).of_eq (λ v, _), cases (c v).head; simp, }, refine (hc.ite hf hg).of_eq (λ v, _), cases (c v).head; simp, }
 
-section sum_parens
-/- In this section we describe an algorithm to count parentheses
-  TODO: find cleaner/easier way and/or migrate this (which is all generic)
-  to catalan.lean -/
-
-def sum_parens (l : list bool) : list bool :=
-l.foldl (λ (acc : list bool) (hd : bool), 
-  if acc.empty then []
-  else if hd = paren.up.to_bool then tt :: acc
-  else acc.tail) [tt]
-
-def sum_parens_len (l : list bool) := (sum_parens l).length
-
-@[simp] lemma sum_parens_snoc (l : list bool) (b : bool) :
-  sum_parens_len (l ++ [b]) = if sum_parens_len l = 0 then 0
-    else if b = paren.up.to_bool then sum_parens_len l + 1 else sum_parens_len l - 1 := 
-by simp [sum_parens, sum_parens_len, apply_ite list.length, list.empty_iff_eq_nil, ← list.length_eq_zero]
-
-lemma mem_sum_parens {l : list bool} : ∀ {x : bool} (hx : x ∈ sum_parens l), x = tt :=
+theorem ite_len_eq {n c f g} (hc : @polytime' n c) (l : ℕ) (hf : @polytime' n f) (hg : @polytime' n g) :
+  polytime' (λ v, if (c v).length = l then f v else g v) :=
 begin
-  refine @list.foldl_rec_on _ _ (λ r, ∀ {x}, x ∈ r → x = tt) l (λ (acc : list bool) (hd : bool), _) _ _ _, { simp, },
-  intros l ih _ _ b, dsimp only,
-  split_ifs, { simp, }, { rintros (rfl|H), { refl, }, exact ih H, },
-  intro H, exact ih (l.tail_subset H),
+  induction l with l ih generalizing c, { refine (hc.ite_nil hf hg).of_eq _, simp [list.empty_iff_eq_nil, list.length_eq_zero], },
+  refine (hc.ite_nil hg $ ih hc.tail).of_eq (λ v, _),
+  cases c v; simp [nat.succ_eq_add_one, @eq_comm ℕ 0],
 end
 
-lemma sum_parens_eq_sum (x : list paren) (h : ∀ pfx, pfx <+: x → 0 ≤ (pfx.map paren.to_int).sum) :
-  ((sum_parens_len (x.map paren.to_bool)) : ℤ) = (x.map paren.to_int).sum + 1 :=
-begin
-  induction x using list.reverse_rec_on with l e ih, { refl, },
-  simp only [list.is_prefix_snoc_iff] at h,
-  specialize ih (λ pfx hpfx, h _ (or.inr hpfx)),
-  have : 0 < (sum_parens_len $ l.map paren.to_bool),
-  { zify, rw ih, specialize h l (or.inr $ list.prefix_refl _), linarith only [h], },
-  cases e; simp [ih, this.ne.symm, this],
-end
-
-lemma sum_parens_zero_of_pfx_zero {x r} (h : r <+: x) (h' : sum_parens_len r = 0) :
-  sum_parens_len x = 0 :=
-begin
-  obtain ⟨x, rfl⟩ := h,
-  induction x using list.reverse_rec_on with l e ih,
-  { simpa using h', }, { simp [← list.append_assoc, ih], }
-end
-
-lemma sum_parens_matching_paren {x} (h : (paren.find_matching_paren x).is_some) :
-  sum_parens_len (x.map paren.to_bool) = 0 :=
-begin
-  obtain ⟨r, h⟩ := option.is_some_iff_exists.mp h,
-  apply sum_parens_zero_of_pfx_zero ((paren.find_matching_paren_is_prefx h).map paren.to_bool),
-  have := sum_parens_eq_sum r.init (λ pfx, paren.sum_nonneg_of_pfx_init h),
-  rw (paren.find_matching_paren_init h).2 at this, 
-  rw ← list.init_append_last' _ (paren.find_matching_paren_last h),
-  norm_cast at this,
-  simp [this],
-end
-
-lemma is_balanced_iff (l : list paren) : paren.are_heights_nonneg l ↔ sum_parens_len (l.map paren.to_bool) = 1 :=
-begin
-  split,
-  { intro h, rcases l with (_|⟨(hd|hd), tl⟩), { refl, }, 
-    { have := sum_parens_eq_sum _ h.1, rw h.2 at this, simpa, },
-    exfalso, exact paren.not_are_heights_nonnneg_down_cons _ h, },
-  { rw paren.are_heights_nonneg, contrapose!,
-    intros h₁ h₂,
-    suffices : _, { refine h₁ this _, zify at h₂, rw sum_parens_eq_sum _ this at h₂, simpa using h₂, },
-    contrapose! h₂,
-    rw sum_parens_matching_paren, { trivial, },
-    erw list.find_is_some, simpa using h₂, }
-end
-
-lemma is_balanced_iff' (l : list bool) : paren.are_heights_nonneg (l.map paren.to_bool.symm) ↔ sum_parens_len l = 1 :=
-by simpa using is_balanced_iff (l.map paren.to_bool.symm)
-
-end sum_parens
-
-lemma polytime'_sum_parens : polytime₁' sum_parens :=
+lemma polytime'_sum_parens : polytime₁' (λ x, list.repeat tt $ sum_parens (x.map paren.to_bool.symm)) :=
 ((polytime'.nth 0).foldl 
-   ((polytime'.nth 0).ite_nil polytime'.nil' -- if acc.empty
-      ((polytime'.nth 1).ite_eq paren.up.to_bool -- if hd = paren.up.to_bool
-         ((polytime'.nth 0).cons tt) -- tt :: acc
-         ((polytime'.nth 0).tail))) -- acc.tail
+   ((polytime'.nth 0).ite_nil polytime'.nil' -- if acc = 0
+      ((polytime'.nth 1).ite_head paren.up.to_bool -- if hd = paren.up
+         ((polytime'.nth 0).cons tt) -- acc + 1
+         ((polytime'.nth 0).tail))) -- acc - 1
    (polytime'.nil'.cons tt) -- [tt]
    (by { simp, complexity, })
-  ).of_eq $ λ v, by simp [sum_parens]
+  ).of_eq $ λ v, begin
+  simp only [vector.nth_zero],
+  induction v.head using list.reverse_rec_on with xs x ih, { simp [sum_parens], },
+  rw [list.foldl_append, ih],
+  simp [list.empty_iff_eq_nil, ← list.length_eq_zero, apply_ite (list.repeat tt), paren.to_bool.symm_apply_eq],
+  refl,
+end
+
+lemma sum_parens {n f} (hf : @polytime' n f) : polytime' (λ v, list.repeat tt $ sum_parens ((f v).map paren.to_bool.symm)) :=
+polytime'.comp (λ _ : fin 1, f) polytime'_sum_parens (λ _, hf)
+
+lemma is_balanced {n f} (hf : @polytime' n f) : polytime' (λ v, [paren.are_heights_nonneg ((f v).map paren.to_bool.symm)]) :=
+(hf.sum_parens.ite_len_eq 1 (polytime'.nil'.cons tt) (polytime'.nil'.cons ff)).of_eq $ λ v, begin
+  by_cases H : paren.are_heights_nonneg ((f v).map paren.to_bool.symm); simp [is_balanced_iff, H],
+end
+
+lemma init {n f} (hf : @polytime' n f) : polytime' (λ v, (f v).init) :=
+hf.reverse.tail.reverse.of_eq $ λ v, by induction f v using list.reverse_rec_on; simp
+
+lemma polytime'_left : polytime₁' (λ x, (left_dyck_word $ x.map paren.to_bool.symm).map paren.to_bool) :=
+((polytime'.nth 0).ite_nil polytime'.nil' $ 
+  ((polytime'.nth 0).foldl (
+    (polytime'.nth 0).ite_nil ((polytime'.nth 0).append $ polytime'.nth 1) $
+    (polytime'.nth 0).is_balanced.ite (polytime'.nth 0) ((polytime'.nth 0).append $ polytime'.nth 1)
+  ) polytime'.nil' (by { simp, sorry, })).tail.init).of_eq $ λ v, begin
+  simp only [vector.nth_zero, list.empty_iff_eq_nil, left_dyck_word, list.map_eq_nil],
+  split_ifs, { simp [left_dyck_word], },
+  simp only [list.map_tail, list.map_init], congr,
+  change _ = equiv_functor.map_equiv list paren.to_bool _, rw list.foldl_transport_equiv,
+  simp [left_alg_foldl, list.empty_iff_eq_nil, equiv_functor.map, apply_ite (list.map paren.to_bool), ite_and],
+end
+
+lemma left {n f} (hf : @polytime' n f) : polytime' (λ v, (left_dyck_word $ (f v).map paren.to_bool.symm).map paren.to_bool) :=
+polytime'.comp (λ _, f) polytime'_left (λ _, hf)
+
+lemma polytime'_drop : @polytime' 2 (λ v, v.head.drop v.tail.head.length) :=
+((polytime'.nth 1).foldl (polytime'.nth 0).tail (polytime'.nth 0) (by { simp, complexity, })).of_eq 
+  (λ v, by simp [vector.nth_one_eq_tail_head])
+
+lemma drop {n f g} (hf : @polytime' n f) (hg : @polytime' n g) :  polytime' (λ v, (f v).drop (g v).length) :=
+polytime'.comp ![f, g] polytime'_drop $ λ i, by fin_cases i; simpa
+
+lemma polytime'_right {n f} (hf : @polytime' n f) : polytime' (λ v, (right_dyck_word $ (f v).map paren.to_bool.symm).map paren.to_bool) :=
+(hf.drop hf.left).tail.tail.of_eq $ λ v, by { simp [right_dyck_word, list.map_drop, list.tail_drop], } 
 
 
 
@@ -196,6 +168,9 @@ end polytime'
 -- left
 -- drop
 -- right
+-- pair
+-- halve
+-- 
 
 
 

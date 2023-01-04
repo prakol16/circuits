@@ -22,7 +22,55 @@ by induction x; simp [*]
 
 end all_some
 
+section init
+
+@[simp] lemma init_nil {α : Type*} : ([] : list α).init = [] := rfl
+
+@[simp] lemma snoc_init {α : Type*} (x : list α) (y : α) : (x ++ [y]).init = x :=
+by simp [list.init]
+
+@[simp] lemma map_init {α β : Type*} (x : list α) (f : α → β) : x.init.map f = (x.map f).init :=
+by { induction x using list.reverse_rec_on with x lst; simp, }
+
+end init
+
+section foldl
+
+@[simp] lemma foldl_eq_iterate {α β : Type*} (ls : list α) (acc : β) (f : β → β) :
+  ls.foldl (λ x _, f x) acc = (f^[ls.length] acc) :=
+by { induction ls generalizing acc; simp [*], }
+
+lemma foldl_transport_equiv {α β β' : Type*} (ls : list α) (acc : β) (f : β → α → β) (eqv : β ≃ β') :
+  eqv (ls.foldl f acc) = ls.foldl (λ x e, eqv $ f (eqv.symm x) e) (eqv acc) :=
+by { induction ls generalizing acc; simp [*], }
+
+end foldl
+
+section drop
+
+@[simp] lemma tail_iterate {α : Type*} (ls : list α) (n : ℕ) : tail^[n] ls = ls.drop n :=
+by { induction n generalizing ls; simp [*, nat.succ_eq_add_one, list.drop_add], }
+
+/- Note: `list.drop_drop` is duplicated as a lemma also as `list.drop_add` -/
+
+lemma drop_tail {α : Type*} (ls : list α) (n : ℕ) : ls.tail.drop n = ls.drop (n + 1) :=
+by rw [← drop_one, drop_drop]
+
+end drop
+
 end list
+
+namespace vector
+
+
+-- TODO: swap equality, LHS should be simp normal form
+lemma nth_one_eq_tail_head {α : Type*} {n} (v : vector α (n + 2)) :
+  v.nth 1 = v.tail.head := by simp [← vector.nth_zero]
+
+@[simp] lemma cons_cons_nth_one {α : Type*} {n} (v : vector α n) (a b : α) :
+  (a ::ᵥ b ::ᵥ v).nth 1 = b := by simp [nth_one_eq_tail_head]
+
+end vector
 
 namespace tree
 

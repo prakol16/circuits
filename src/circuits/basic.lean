@@ -165,5 +165,9 @@ def and_circuit : circuit bool (fin 2) unit :=
   wf := by simp [false.well_founded],
   val := λ _ (b : list bool), (b.inth 0) && (b.inth 1) }
 
+structure circuit_family (δ : Type*) :=
+(cct_size : ℕ → ℕ)
+(ccts : ∀ (n : ℕ), circuit δ (fin n) (fin (cct_size n)))
+(outs : ∀ (n : ℕ), list (fin n ⊕ fin (cct_size n)))
 
 

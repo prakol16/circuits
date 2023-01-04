@@ -7,6 +7,7 @@ import algebra.big_operators
 import combinatorics.catalan
 import tactic.derive_fintype
 import data.nat.psub
+import misc
 
 namespace list
 variables {α : Type*}
@@ -181,6 +182,9 @@ instance : inhabited paren := ⟨up⟩
 def are_heights_nonneg (x : list paren) : Prop :=
 (∀ pfx, pfx <+: x → 0 ≤ (pfx.map to_int).sum) ∧ (x.map to_int).sum = 0
 
+instance : decidable_pred are_heights_nonneg := λ x,
+decidable_of_iff ((∀ (pfx : list paren), pfx ∈ x.inits → 0 ≤ (pfx.map to_int).sum) ∧ (x.map to_int).sum = 0) (by simp; refl)
+
 lemma are_heights_nonneg_iff {x : list paren} :
   are_heights_nonneg x ↔ (∀ sfx, sfx <:+ x → (sfx.map to_int).sum ≤ 0) ∧ (x.map to_int).sum = 0 :=
 begin
@@ -248,7 +252,7 @@ end
 
 lemma find_matching_paren_sum {x r} (hr : find_matching_paren x = some r) :
   (r.map to_int).sum = -1 :=
-by { rw ← list.init_append_last' _ (find_matching_paren_last hr), simp [(find_matching_paren_init hr).2], }
+by { rw ← list.init_append_last' _ (find_matching_paren_last hr), simpa using (find_matching_paren_init hr).2, }
 
 lemma find_matching_paren_suffx {x r} (hx : are_heights_nonneg (up :: x))
   (hr : find_matching_paren x = some r) : are_heights_nonneg (x.drop r.length) :=
@@ -364,6 +368,8 @@ by { ext : 1, apply_fun (coe : _ → list paren) at h, simpa [list.append_right_
 
 @[simp] lemma dyck_words.append_right_inj {y x₁ x₂ : dyck_words} : y ++ x₁ = y ++ x₂ ↔ x₁ = x₂ :=
 (dyck_words.append_right_injective y).eq_iff
+
+@[simp] lemma dyck_words.nil_right : dyck_words.nil.right = dyck_words.nil := rfl
 
 @[simp] lemma dyck_words_right (x y : dyck_words) : (x.surround ++ y).right = y :=
 begin
@@ -481,3 +487,116 @@ begin
 end
 
 end tree
+
+section algorithms
+open paren
+
+/- In this section, we present `foldl` algorithms for decomposing a dyck word.
+These are simpler to define (only using `foldl` loops, rather than `init` and `find`)
+but more difficult to prove properties about. They are useful when balanced parentheses
+are used for defining algorithms. -/
+
+/-- Counts the number of `(` minus `)` plus 1, but returns 0 if 
+  there are more `)` than `(`.
+  It does this by using an accumulator which gets "stuck" at `0` -/
+def sum_parens (l : list paren) : ℕ :=
+l.foldl (λ (acc : ℕ) (hd : paren), 
+  if acc = 0 then 0
+  else if hd = up then acc + 1
+  else acc - 1) 1
+
+@[simp] lemma sum_parens_snoc (l : list paren) (b : paren) :
+  sum_parens (l ++ [b]) = if sum_parens l = 0 then 0
+    else if b = up then sum_parens l + 1 else sum_parens l - 1 := 
+by simp [sum_parens]
+
+lemma sum_parens_eq_sum (x : list paren) (h : ∀ pfx, pfx <+: x → 0 ≤ (pfx.map to_int).sum) :
+  ((sum_parens x) : ℤ) = (x.map to_int).sum + 1 :=
+begin
+  induction x using list.reverse_rec_on with l e ih, { refl, },
+  simp only [list.is_prefix_snoc_iff] at h,
+  specialize ih (λ pfx hpfx, h _ (or.inr hpfx)),
+  have : 0 < (sum_parens l),
+  { zify, rw ih, specialize h l (or.inr $ list.prefix_refl _), linarith only [h], },
+  cases e; simp [ih, this.ne.symm, this],
+end
+
+
+lemma sum_parens_zero_of_pfx_zero {x r} (h : r <+: x) (h' : sum_parens r = 0) :
+  sum_parens x = 0 :=
+begin
+  obtain ⟨x, rfl⟩ := h,
+  induction x using list.reverse_rec_on with l e ih,
+  { simpa using h', }, { simp [← list.append_assoc, ih], }
+end
+
+lemma sum_parens_matching_paren {x} (h : (find_matching_paren x).is_some) :
+  sum_parens x = 0 :=
+begin
+  obtain ⟨r, h⟩ := option.is_some_iff_exists.mp h,
+  apply sum_parens_zero_of_pfx_zero (find_matching_paren_is_prefx h),
+  have := sum_parens_eq_sum r.init (λ pfx, sum_nonneg_of_pfx_init h),
+  rw (find_matching_paren_init h).2 at this, 
+  rw ← list.init_append_last' _ (find_matching_paren_last h),
+  norm_cast at this,
+  simp [this],
+end
+
+lemma is_balanced_iff (l : list paren) : sum_parens l = 1 ↔ are_heights_nonneg l :=
+begin
+  split,
+  { rw are_heights_nonneg, contrapose!,
+    intros h₁ h₂,
+    suffices : _, { refine h₁ this _, zify at h₂, rw sum_parens_eq_sum _ this at h₂, simpa using h₂, },
+    contrapose! h₂,
+    rw sum_parens_matching_paren, { trivial, },
+    erw list.find_is_some, simpa using h₂, },
+  { intro h, rcases l with (_|⟨(hd|hd), tl⟩), { refl, }, 
+    { have := sum_parens_eq_sum _ h.1, rw h.2 at this, simpa, },
+    exfalso, exact not_are_heights_nonnneg_down_cons _ h, },
+end
+
+def left_alg_foldl (acc : list paren) (e : paren) : list paren :=
+  if ¬acc.empty ∧ are_heights_nonneg acc then acc
+  else acc ++ [e]
+
+lemma left_alg_spec {x : list paren} (hx : ∀ pfx, pfx <+: x.init → 0 ≤ (pfx.map paren.to_int).sum) :
+  (up :: x).foldl left_alg_foldl [] = up :: x :=
+begin
+  induction x using list.reverse_rec_on with l e ih, { simp [left_alg_foldl], },
+  rw list.snoc_init at hx,
+  specialize ih (λ pfx h, hx _ (h.trans l.init_prefix)),
+  rw [← list.cons_append, list.foldl_append, ih],
+  have : ¬are_heights_nonneg (up :: l),
+  { rintro ⟨_, h⟩, specialize hx _ (list.prefix_refl _), simp at h, linarith only [hx, h], }, 
+  simpa [left_alg_foldl],
+end
+
+lemma left_alg_spec' {x : dyck_words} {y : list paren} :
+  ((↑x.surround : list paren) ++ y).foldl left_alg_foldl [] = 
+    (↑x.surround : list paren) :=
+begin
+  rw [list.foldl_append, dyck_words.surround_val, list.cons_append, left_alg_spec, list.foldl_fixed'],
+  { intro b, rw [left_alg_foldl, if_pos], simpa using x.surround.prop, },
+  { simpa using x.prop.1, },
+end
+
+def left_dyck_word (x : list paren) : list paren :=
+if x.empty then [] else (x.foldl left_alg_foldl []).tail.init
+
+@[simp] lemma left_dyck_word_spec (x : dyck_words) : left_dyck_word ↑x = ↑x.left :=
+begin
+  induction x using paren.dyck_words.rec_balance with l r _ _, { simp [left_dyck_word, left_alg_foldl], },
+  rw [left_dyck_word, dyck_words.append_val, left_alg_spec'],
+  simp,
+end
+
+def right_dyck_word (x : list paren) : list paren := x.drop ((left_dyck_word x).length + 2)
+
+@[simp] lemma right_dyck_word_spec (x : dyck_words) : right_dyck_word ↑x = ↑x.right :=
+begin
+  induction x using paren.dyck_words.rec_balance with l r _ _, { simp [right_dyck_word], },
+  rw [right_dyck_word, left_dyck_word_spec], simp [list.drop_append],
+end
+
+end algorithms
