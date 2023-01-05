@@ -153,10 +153,39 @@ lemma polytime'_drop : @polytime' 2 (λ v, v.head.drop v.tail.head.length) :=
 lemma drop {n f g} (hf : @polytime' n f) (hg : @polytime' n g) :  polytime' (λ v, (f v).drop (g v).length) :=
 polytime'.comp ![f, g] polytime'_drop $ λ i, by fin_cases i; simpa
 
-lemma polytime'_right {n f} (hf : @polytime' n f) : polytime' (λ v, (right_dyck_word $ (f v).map paren.to_bool.symm).map paren.to_bool) :=
-(hf.drop hf.left).tail.tail.of_eq $ λ v, by { simp [right_dyck_word, list.map_drop, list.tail_drop], } 
+lemma polytime'_right : polytime₁' (λ x, (right_dyck_word $ x.map paren.to_bool.symm).map paren.to_bool) :=
+((polytime'.nth 0).drop (polytime'.nth 0).left).tail.tail.of_eq $ λ v, by { simp [right_dyck_word, list.map_drop, list.tail_drop], } 
 
+lemma polytime'_count_tt : polytime₁' (λ x, list.repeat tt (x.count tt)) :=
+((polytime'.nth 0).foldl ((polytime'.nth 1).ite ((polytime'.nth 0).cons tt) (polytime'.nth 0)) polytime'.nil' 
+  (by { simp, complexity, })).of_eq $ λ v,
+by { simp, induction v.head using list.reverse_rec_on with l e ih, { simp, }, cases e; simp [*], }
 
+lemma of_tree_polytime {f : tree unit → tree unit} (hf : tree.polytime f) :
+  ∃ f' : list bool → list bool, polytime₁' f' ∧ ∀ (x : paren.dyck_words),
+    f' ((↑x : list paren).map paren.to_bool) = (↑(tree.equiv_dyck_words $ f (tree.equiv_dyck_words.symm x)) : list paren).map paren.to_bool :=
+begin
+  induction hf,
+  case tree.polytime.nil { sorry { refine ⟨λ _, [], polytime'.nil', _⟩, simp, } },
+  case tree.polytime.id' { sorry { refine ⟨λ x, x, (polytime'.nth 0).of_eq _, _⟩; simp, } },
+  case tree.polytime.left { sorry { refine ⟨_, polytime'_left, _⟩, simp, } },
+  case tree.polytime.right { sorry { refine ⟨_, polytime'_right, _⟩, simp, } },
+  case tree.polytime.pair : f g _ _ ihf ihg
+  { sorry { rcases ihf with ⟨f', ihf, Hf⟩, rcases ihg with ⟨g', ihg, Hg⟩, 
+    refine ⟨λ x, paren.up.to_bool :: (f' x) ++ paren.down.to_bool :: (g' x), 
+      (ihf.cons paren.up.to_bool).append (ihg.cons paren.down.to_bool), _⟩,
+    simp [Hf, Hg], } },
+  case tree.polytime.comp : f g _ _ ihf ihg
+  { sorry { rcases ihf with ⟨f', ihf, Hf⟩, rcases ihg with ⟨g', ihg, Hg⟩,
+    refine ⟨λ x, f' (g' x), polytime'.comp (λ _ v, g' v.head) ihf (λ _, ihg), _⟩,
+    simp [Hf, Hg], } },
+  case tree.polytime.ite : f g h _ _ _ ihf ihg ihh
+  { sorry { rcases ihf with ⟨f', ihf, Hf⟩, rcases ihg with ⟨g', ihg, Hg⟩, rcases ihh with ⟨h', ihh, Hh⟩,
+    refine ⟨λ x, if (f' x).empty then g' x else h' x, ihf.ite_nil ihg ihh, _⟩,
+    intro x, simp only [Hf],
+    rcases f (tree.equiv_dyck_words.symm x) with (_|⟨⟨⟩, _, _⟩); simp [Hg, Hh], } },
+  
+end 
 
 end polytime'
 

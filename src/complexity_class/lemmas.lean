@@ -83,7 +83,7 @@ by { complexity using λ x, !x.is_none, cases x; simp, }
   @complexity_class.mem α β (α → β) _ _ _ (λ x, @tree.cases_on unit (λ _, β) (f x) (g x) (h x)) C :=
 begin
   complexity using (λ x, if f x = tree.nil then g x else h x () (f x).left (f x).right),
-  cases f x, { simp, }, cases ᾰ, simp,
+  rcases f x with (_|⟨⟨⟩, _, _⟩); simp,
 end
 
 lemma of_fin_cases [nonempty γ] (S : finset α)

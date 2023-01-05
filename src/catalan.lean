@@ -161,7 +161,7 @@ by cases x; simp [height]
 
 end tree
 
-@[derive [fintype, decidable_eq]]
+@[derive [decidable_eq]]
 inductive paren
 | up | down
 
@@ -169,7 +169,9 @@ namespace paren
 
 instance : inhabited paren := ⟨up⟩
 
-@[irreducible] def to_bool : paren ≃ bool :=
+instance : fintype paren := ⟨⟨{up, down}, by simp⟩, λ x, by cases x; simp⟩
+
+def to_bool : paren ≃ bool :=
 { to_fun := λ x, by { cases x, exacts [ff, tt] },
   inv_fun := λ x, by { cases x, exacts [up, down] },
   left_inv := λ x, by cases x; refl,
@@ -178,6 +180,8 @@ instance : inhabited paren := ⟨up⟩
 @[simp] def to_int : paren → ℤ
 | up := 1
 | down := -1
+
+lemma to_int_injective : function.injective to_int := λ x y, by cases x; cases y; dec_trivial
 
 def are_heights_nonneg (x : list paren) : Prop :=
 (∀ pfx, pfx <+: x → 0 ≤ (pfx.map to_int).sum) ∧ (x.map to_int).sum = 0
@@ -292,6 +296,30 @@ begin
   { have := find_paren_nonneg h, rw [find_matching_paren] at this,
     simp [find_matching_paren, this, h.2], },
   simpa using find_matching_paren_append ih [lt],
+end
+
+lemma univ_sum {α : Type*} [add_comm_monoid α] (f : paren → α) : finset.univ.sum f = f up + f down :=
+by simp [finset.univ, fintype.elems]
+
+lemma count_eq_of_sum_zero' {x : multiset paren} (h : (x.map to_int).sum = 0) :
+  x.count paren.up = x.count paren.down :=
+begin
+  rw [finset.sum_multiset_count_of_subset (x.map to_int) (finset.univ.map ⟨to_int, to_int_injective⟩)] at h,
+  { simpa [univ_sum, ← int.sub_eq_add_neg, int.sub_eq_zero_iff_eq, x.count_map_eq_count' to_int to_int_injective] using h, },
+  simp [finset.subset_iff],
+end
+
+lemma count_eq_of_sum_zero {x : list paren} (h : (x.map to_int).sum = 0) :
+  x.count paren.up = x.count paren.down := @count_eq_of_sum_zero' x (by simpa)
+
+-- There's got to be a lemma that says `x.length = finset.univ.sum (λ e, x.count e)` but *I can't find it*
+lemma _root_.list.paren.length_eq_count_sum (x : list paren) : x.count paren.up + x.count paren.down = x.length :=
+by { rw list.length_eq_countp_add_countp (eq paren.up), simp [show ∀ a, ¬(up = a) ↔ down = a, by rintro (_|_); simp], refl, }
+
+lemma two_mul_count_eq_len {x : list paren} (h : (x.map to_int).sum = 0) (p : paren) : x.count p * 2 = x.length :=
+begin
+  suffices : x.count paren.up * 2 = x.length, { cases p, { exact this, }, { rwa ← count_eq_of_sum_zero h, } },
+  rw [mul_two, ← list.paren.length_eq_count_sum, count_eq_of_sum_zero h],
 end
 
 def dyck_words := {l // are_heights_nonneg l}
@@ -478,6 +506,18 @@ by simp [equiv_dyck_words]
 @[simp] lemma equiv_dyck_words_symm_node (x y : paren.dyck_words) :
   equiv_dyck_words.symm (x.surround ++ y) = (equiv_dyck_words.symm x) △ (equiv_dyck_words.symm y) :=
 by simp [equiv_dyck_words]
+
+@[simp] lemma equiv_dyck_words_left (x : tree unit) : equiv_dyck_words x.left = (equiv_dyck_words x).left :=
+by { rcases x with (_|⟨⟨⟩, _, _⟩); simp, }
+
+@[simp] lemma equiv_dyck_words_right (x : tree unit) : equiv_dyck_words x.right = (equiv_dyck_words x).right :=
+by { rcases x with (_|⟨⟨⟩, _, _⟩); simp, }
+
+@[simp] lemma equiv_dyck_words_symm_left (x : paren.dyck_words) : equiv_dyck_words.symm x.left = (equiv_dyck_words.symm x).left :=
+by { rw equiv.apply_eq_iff_eq_symm_apply, simp, }
+
+@[simp] lemma equiv_dyck_words_symm_right (x : paren.dyck_words) : equiv_dyck_words.symm x.right = (equiv_dyck_words.symm x).right :=
+by { rw equiv.apply_eq_iff_eq_symm_apply, simp, }
 
 lemma equiv_dyck_words_length (x : tree unit) : 2 * x.num_nodes = (↑(equiv_dyck_words x) : list paren).length :=
 begin
