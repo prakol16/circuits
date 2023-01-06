@@ -14,8 +14,12 @@ open_locale tree
 @[complexity] lemma cons : @list.cons α ∈ₑ C := C.id'
 @[complexity] protected lemma encode : @encode α _ ∈ₑ C := C.id'
 
-protected lemma mem_iff_comp_encode {f : α → β} :
+lemma mem_iff_comp_encode {f : α → β} :
   f ∈ₑ C ↔ (λ x, encode (f x)) ∈ₑ C := iff.rfl
+
+lemma mem_iff_comp_encode' {C : complexity_class} {β γ : Type} [tencodable γ] {f : β → α} {finv : α → option β} {linv : ∀ b, finv (f b) = some b} 
+  {g : γ → β} : by haveI : tencodable β := tencodable.of_left_injection f finv linv; exact 
+  g ∈ₑ C ↔ (λ x, f (g x)) ∈ₑ C := iff.rfl
 
 @[complexity] lemma tree_left : @tree.left unit ∈ₑ C :=
 ⟨_, C.left, λ _, rfl⟩
@@ -276,10 +280,35 @@ end
 
 end list
 
+section equiv
+
+
+lemma encode_of_left_injection  {β : Type} {f : β → α} {finv : α → option β} {linv : ∀ b, finv (f b) = some b} :
+  by haveI : tencodable β := tencodable.of_left_injection f finv linv; exact f ∈ₑ C :=
+⟨_, C.id, λ x, rfl⟩
+
+lemma decode_of_left_injection  {β : Type} {f : β → α} {finv : α → option β} {linv : ∀ b, finv (f b) = some b} 
+  (hd : decode α ∈ₑ C) (hf : by haveI : tencodable β := tencodable.of_left_injection f finv linv; exact finv ∈ₑ C) :
+  by haveI : tencodable β := tencodable.of_left_injection f finv linv; exact decode β ∈ₑ C :=
+by { letI : tencodable β := tencodable.of_left_injection f finv linv, refine option_bind hd _, complexity, }
+
+lemma encode_of_equiv {C : complexity_class} {β : Type} {e : β ≃ α} :
+  by haveI : tencodable β := tencodable.of_equiv _ e; exact ⇑e ∈ₑ C := encode_of_left_injection
+
+lemma decode_of_equiv {C : complexity_class} {β : Type} {e : β ≃ α} :
+  by haveI : tencodable β := tencodable.of_equiv _ e; exact ⇑e.symm ∈ₑ C :=
+⟨_, C.id, λ x, congr_arg encode (e.apply_symm_apply x).symm⟩
+
+lemma decodable_of_equiv {C : complexity_class} {β : Type} {e : β ≃ α} (hd : decode α ∈ₑ C) :
+  by haveI : tencodable β := tencodable.of_equiv _ e; exact decode β ∈ₑ C :=
+by letI : tencodable β := tencodable.of_equiv _ e; exact decode_of_left_injection hd (mem.comp complexity_class.some decode_of_equiv)
+
+end equiv
+
 section subtype
 
 @[complexity] lemma subtype_coe {P : α → Prop} [decidable_pred P] : (coe : {x // P x} → α) ∈ₑ C :=
-⟨_, C.id, λ _, rfl⟩
+encode_of_left_injection
 
 @[complexity] lemma subtype_val {P : α → Prop} [decidable_pred P] : (subtype.val : {x // P x} → α) ∈ₑ C :=
 subtype_coe
@@ -309,9 +338,13 @@ begin
   intro x,
   simp only [hP, has_uncurry.uncurry, tencodable.encode_inj], dsimp, simp only [to_bool_iff],
   split_ifs with H,
-  { simp [encode] at hf, simp [hf, H], refl, },
-  { simp [encode] at hg, simp [hg, H], refl, }
+  { simp [tencodable.subtype_encode] at hf, simp [hf, H], refl, },
+  { simp [tencodable.subtype_encode] at hg, simp [hg, H], refl, }
 end⟩
+
+lemma subtype_decode {P : α → Prop} [decidable_pred P] (hd : decode α ∈ₑ C)
+  (hP : P ∈ₚ C) : decode {x // P x} ∈ₑ C :=
+decode_of_left_injection hd (by complexity)
 
 @[complexity] lemma fin_mk {n} {f : α → ℕ} (P : ∀ x, f x < n) (hf : f ∈ₑ C) :
   (λ x, (⟨f x, P x⟩ : fin n)) ∈ₑ C := hf
@@ -361,13 +394,28 @@ end
 end subtype
 
 section setoid
-variables {h : setoid α} {out : quotient h → α} {hout : function.left_inverse quotient.mk out}
+variables [h : setoid α] {out : quotient h → α} {hout : function.left_inverse quotient.mk out}
 
 include h out hout C
 
 lemma setoid_out : by haveI : tencodable (quotient h) := setoid.tencodable h out hout; exact out ∈ₑ C :=
 ⟨_, C.id, λ x, rfl⟩
 
+lemma decodable_of_quotient_mk (hd : decode α ∈ₑ C) (hq : by haveI : tencodable (quotient h) := setoid.tencodable h out hout; exact @quotient.mk _ h ∈ₑ C) :
+  by haveI : tencodable (quotient h) := setoid.tencodable h out hout; exact (decode (quotient h)) ∈ₑ C :=
+by { letI : tencodable (quotient h) := setoid.tencodable h out hout, refine decode_of_left_injection hd (mem.comp complexity_class.some hq), }
+
+lemma quotient_lift {f : α → β} {pf : ∀ (a b : α), a ≈ b → f a = f b}
+  (hf : f ∈ₑ C) : by haveI : tencodable (quotient h) := setoid.tencodable h out hout; exact
+  (quotient.lift f pf) ∈ₑ C :=
+begin
+  letI : tencodable (quotient h) := setoid.tencodable h out hout,
+  convert hf.comp setoid_out, ext x,
+  refine quotient.induction_on x (λ x, pf _ _ (quotient.exact _)),
+  rw hout,
+end
+
+#check quotient.exact 
 end setoid
 
 section multiset

@@ -24,7 +24,7 @@ variables [tencodable α] [tencodable β]
 def mem1 (f : α → β) : Prop :=
 ∃ (f' : tree unit → tree unit), C.prop f' ∧ ∀ x : α, f' (encode x) = encode (f x)
 
-/-- Many argument function is in `f` -/
+/-- Many argument function is in `C` -/
 def mem [has_uncurry γ α β] (f : γ) (C : complexity_class) : Prop :=
 C.mem1 ↿f
 

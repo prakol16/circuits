@@ -83,6 +83,11 @@ lemma encode_star : encode punit.star = nil := rfl
 
 section prod
 
+instance (β : α → Type) [∀ i, tencodable (β i)] : tencodable (sigma β) :=
+{ encode := λ x, (encode x.1) △ (encode x.2),
+  decode := λ x, (decode α x.left).bind $ λ a, (decode (β a) x.right).bind $ λ b, some ⟨a, b⟩,
+  encodek := λ x, by cases x; simp }
+
 /-- Encoding of a pair of encodable elements -/
 instance _root_.prod.tencodable : tencodable (α × β) :=
 { encode := λ x, (encode x.1) △ (encode x.2),
@@ -217,9 +222,11 @@ end sum
 section subtype
 
 instance subtype.tencodable (P : α → Prop) [decidable_pred P] : tencodable {x // P x} :=
-{ encode := λ x, encode (x : α),
-  decode := λ x, (decode α x).bind (λ r, if h : P r then some ⟨r, h⟩ else none),
-  encodek := λ x, by simpa [imp_false] using x.prop }
+of_left_injection (coe : _ → α) (λ r : α, if h : P r then some (⟨r, h⟩ : {x // P x}) else none)
+  (λ x, by simpa [imp_false] using x.prop)
+
+lemma subtype_encode {P : α → Prop} [decidable_pred P] (a : {x // P x}) :
+  encode a = encode (a : α) := rfl 
 
 instance {n} : tencodable (vector α n) := subtype.tencodable _
 

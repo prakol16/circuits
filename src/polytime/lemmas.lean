@@ -230,8 +230,8 @@ begin
   induction ls x; simp [*],
 end
 
-@[complexity] lemma list_insertion_sort {r : γ → α → α → Prop} [∀ x, decidable_rel (r x)] {a : γ → α} {ls : γ → list α} (hr : r ∈ₚ PTIME)
-  (he : a ∈ₑ PTIME) (hls : ls ∈ₑ PTIME) : (λ x, (ls x).insertion_sort (r x)) ∈ₑ PTIME :=
+@[complexity] lemma list_insertion_sort {r : γ → α → α → Prop} [∀ x, decidable_rel (r x)] {ls : γ → list α} (hr : r ∈ₚ PTIME)
+  (hls : ls ∈ₑ PTIME) : (λ x, (ls x).insertion_sort (r x)) ∈ₑ PTIME :=
 by { complexity using λ x, (ls x).foldr (λ b ih, list.ordered_insert (r x) b ih) [], induction ls x; simp [*], }
 
 @[complexity] lemma list_append : ((++) : list α → list α → list α) ∈ₑ PTIME :=
@@ -240,6 +240,58 @@ by { complexity using λ l₁ l₂, l₁.foldr (λ hd acc, hd :: acc) l₂, indu
 @[complexity] lemma list_drop : @list.drop α ∈ₑ PTIME :=
 by { complexity using λ n l, list.tail^[n] l, simp, }
 
+@[complexity] lemma list_any {l : α → list β} {p : α → β → bool} (hl : l ∈ₑ PTIME) (hp : p ∈ₑ PTIME) :
+  (λ x, (l x).any (p x)) ∈ₑ PTIME :=
+by { delta list.any, complexity, use 0, simp, }
+
+@[complexity] lemma list_all {l : α → list β} {p : α → β → bool} (hl : l ∈ₑ PTIME) (hp : p ∈ₑ PTIME) :
+  (λ x, (l x).all (p x)) ∈ₑ PTIME :=
+by { delta list.all, complexity, use 0, simp, }
+
+@[complexity] lemma list_bex {l : α → list β} {p : α → β → Prop} [∀ x y, decidable (p x y)] (hl : l ∈ₑ PTIME) (hp : p ∈ₚ PTIME) :
+  (λ x, ∃ e ∈ l x, p x e) ∈ₚ PTIME :=
+by { simp_rw [← list.any_iff_exists_prop], complexity, }
+
+@[complexity] lemma list_ball {l : α → list β} {p : α → β → Prop} [∀ x y, decidable (p x y)] (hl : l ∈ₑ PTIME) (hp : p ∈ₚ PTIME) :
+  (λ x, ∀ e ∈ l x, p x e) ∈ₚ PTIME :=
+by { simp_rw ← list.all_iff_forall_prop, complexity, }
+
+@[complexity] lemma list_mem : ((∈) : α → list α → Prop) ∈ₚ PTIME :=
+by { haveI : decidable_eq α := decidable_eq_of_encodable _, complexity using λ x l, ∃ z ∈ l, z = x, simp, }
+
+@[complexity] lemma pairwise {l : α → list β} {r : α → β → β → Prop} (hl : l ∈ₑ PTIME)
+  (hr : r ∈ₚ PTIME) : (λ x, (l x).pairwise (r x)) ∈ₚ PTIME :=
+begin
+  classical, rw ← complexity_class.mem_iff_mem_pred,
+  complexity using λ x, (l x).stack_rec (λ _ : unit, tt) (λ _ _ _, ())
+    (λ ih hd tl _, (∀ a' ∈ tl, r x hd a') && ih) (), { use 0, simp, },
+  induction l x; simp [*],
+end
+
+@[complexity] lemma list_nodup : (@list.nodup α) ∈ₚ PTIME :=
+by { dunfold list.nodup, complexity, }
+
 end list
+
+section finset
+
+@[complexity] lemma polytime_lift_le : (@lift_le α _) ∈ₚ PTIME :=
+by { dunfold lift_le, complexity, }
+
+@[complexity] lemma multiset_nodup : (@multiset.nodup α) ∈ₚ PTIME :=
+by { complexity using λ s, (s.sort lift_le).nodup, simpa using (@multiset.coe_nodup _ (s.sort lift_le)).symm, }
+
+@[complexity] lemma to_multiset : (show list α → multiset α, from @quotient.mk _ (list.is_setoid α)) ∈ₑ PTIME :=
+by { rw complexity_class.mem_iff_comp_encode', complexity using λ x, x.insertion_sort lift_le, simp [list.merge_sort_eq_insertion_sort], }
+
+instance {α : Type} [polycodable α] : polycodable (multiset α) :=
+⟨complexity_class.decodable_of_quotient_mk (polycodable.poly (list α)) to_multiset⟩ 
+
+instance {α : Type} [decidable_eq α] [polycodable α] : polycodable (finset α) :=
+⟨complexity_class.decodable_of_equiv $ complexity_class.subtype_decode (polycodable.poly _) multiset_nodup⟩
+
+end finset
+
+
 
 end polytime

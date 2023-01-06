@@ -184,28 +184,17 @@ begin
     refine ⟨λ x, if (f' x).empty then g' x else h' x, ihf.ite_nil ihg ihh, _⟩,
     intro x, simp only [Hf],
     rcases f (tree.equiv_dyck_words.symm x) with (_|⟨⟨⟩, _, _⟩); simp [Hg, Hh], } },
-  
+  sorry,
 end 
 
+instance : tencodable paren := tencodable.of_equiv bool paren.to_bool
+
+lemma _root_.polytime.equiv_dyck_words : (λ x : tree unit, (↑(tree.equiv_dyck_words x) : list paren)) ∈ₑ PTIME :=
+begin
+  complexity using λ x, x.stack_rec (λ _ : unit, []) (λ _ _ _, ()) (λ _ _ _, ())
+    (λ ih₁ ih₂ _ _ _, paren.up :: (ih₁ ++ paren.down :: ih₂)) (),
+  { use 1, simp [add_assoc], },
+  induction x using tree.unit_rec_on; simp [*],
+end
+
 end polytime'
-
--- Plan:
--- reverse
--- append
--- are_prefixes_nonneg -- 
--- is_balanced
--- left
--- drop
--- right
--- pair
--- halve
--- 
-
-
-
-/-
-There is a notion of `circuit computation`
-
-
-
--/
