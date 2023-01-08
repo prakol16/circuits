@@ -292,6 +292,10 @@ instance {α : Type} [decidable_eq α] [polycodable α] : polycodable (finset α
 
 end finset
 
+section finmap
 
+
+
+end finmap
 
 end polytime

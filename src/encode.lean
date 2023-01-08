@@ -5,6 +5,7 @@ Authors: Leonardo de Moura, Mario Carneiro
 -/
 import data.tree
 import data.sign
+import data.finmap
 import logic.equiv.basic
 import tactic.ring
 import tactic.zify
@@ -83,7 +84,7 @@ lemma encode_star : encode punit.star = nil := rfl
 
 section prod
 
-instance (β : α → Type) [∀ i, tencodable (β i)] : tencodable (sigma β) :=
+instance (β : α → Type*) [∀ i, tencodable (β i)] : tencodable (sigma β) :=
 { encode := λ x, (encode x.1) △ (encode x.2),
   decode := λ x, (decode α x.left).bind $ λ a, (decode (β a) x.right).bind $ λ b, some ⟨a, b⟩,
   encodek := λ x, by cases x; simp }
@@ -280,9 +281,23 @@ instance [decidable_eq α] : tencodable (finset α) :=
 of_equiv {val : multiset α // val.nodup}
 { to_fun := λ x, ⟨x.1, x.2⟩,
   inv_fun := λ x, ⟨x.1, x.2⟩,
-  left_inv := by rintro ⟨x, h⟩; refl,
-  right_inv := by rintro ⟨x, h⟩; refl }
+  left_inv := λ ⟨x, h⟩, rfl,
+  right_inv := λ ⟨x, h⟩, rfl }
 
 end finset
+
+section finmap
+
+instance _root_.multiset.nodupkeys_decidable {α : Type*} {β : α → Type*} [decidable_eq α] (s : multiset (sigma β)) : decidable s.nodupkeys :=
+quotient.rec_on_subsingleton s $ λ l, l.keys.nodup_decidable
+
+instance [decidable_eq α] {β : α → Type*} [∀ i, tencodable (β i)] : tencodable (finmap β) :=
+of_equiv {val : multiset (sigma β) // val.nodupkeys}
+{ to_fun := λ x, ⟨x.1, x.2⟩,
+  inv_fun := λ x, ⟨x.1, x.2⟩,
+  left_inv := λ ⟨x₁, x₂⟩, rfl,
+  right_inv := λ ⟨x₁, x₂⟩, rfl }
+
+end finmap
 
 end tencodable

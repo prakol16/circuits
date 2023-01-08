@@ -13,6 +13,7 @@ open_locale tree
 @[complexity] lemma prod_mk : @prod.mk α β ∈ₑ C := C.id'
 @[complexity] lemma cons : @list.cons α ∈ₑ C := C.id'
 @[complexity] protected lemma encode : @encode α _ ∈ₑ C := C.id'
+@[complexity] lemma sigma_mk : @complexity_class.mem _ _ (α → β → (Σ _ : α, β)) _ _ _ sigma.mk C := C.id'
 
 lemma mem_iff_comp_encode {f : α → β} :
   f ∈ₑ C ↔ (λ x, encode (f x)) ∈ₑ C := iff.rfl
@@ -414,8 +415,7 @@ begin
   refine quotient.induction_on x (λ x, pf _ _ (quotient.exact _)),
   rw hout,
 end
-
-#check quotient.exact 
+ 
 end setoid
 
 section multiset
@@ -423,6 +423,28 @@ section multiset
 @[complexity] lemma multiset_sort : multiset.sort (@tencodable.lift_le α _) ∈ₑ C := setoid_out
 
 end multiset
+
+section sigma
+
+@[complexity] lemma sigma_fst {β : α → Type} [∀ i, tencodable (β i)] :
+  (@sigma.fst α β) ∈ₑ C :=
+⟨_, C.left, λ x, rfl⟩
+
+@[complexity] lemma sigma_snd : @complexity_class.mem _ _ ((Σ _ : α, β) → β) _ _ _ sigma.snd C :=
+⟨_, C.right, λ x, rfl⟩
+
+end sigma
+
+section finmap
+
+@[complexity] lemma finmap_entries [decidable_eq α] : (@finmap.entries α (λ _, β)) ∈ₑ C := C.id'
+
+@[complexity] lemma finmap_decode [decidable_eq α] (hd : decode (multiset (Σ _ : α, β)) ∈ₑ C) 
+  (H : @multiset.nodupkeys α (λ _, β) ∈ₚ C) :
+  decode (@finmap α (λ _, β)) ∈ₑ C :=
+decodable_of_equiv $ subtype_decode hd H
+
+end finmap
 
 end complexity_class
 
