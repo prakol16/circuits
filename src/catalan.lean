@@ -189,6 +189,8 @@ def are_heights_nonneg (x : list paren) : Prop :=
 instance : decidable_pred are_heights_nonneg := λ x,
 decidable_of_iff ((∀ (pfx : list paren), pfx ∈ x.inits → 0 ≤ (pfx.map to_int).sum) ∧ (x.map to_int).sum = 0) (by simp; refl)
 
+lemma are_heights_nonneg_nil : are_heights_nonneg list.nil := dec_trivial
+
 lemma are_heights_nonneg_iff {x : list paren} :
   are_heights_nonneg x ↔ (∀ sfx, sfx <:+ x → (sfx.map to_int).sum ≤ 0) ∧ (x.map to_int).sum = 0 :=
 begin
@@ -316,10 +318,10 @@ lemma count_eq_of_sum_zero {x : list paren} (h : (x.map to_int).sum = 0) :
 lemma _root_.list.paren.length_eq_count_sum (x : list paren) : x.count paren.up + x.count paren.down = x.length :=
 by { rw list.length_eq_countp_add_countp (eq paren.up), simp [show ∀ a, ¬(up = a) ↔ down = a, by rintro (_|_); simp], refl, }
 
-lemma two_mul_count_eq_len {x : list paren} (h : (x.map to_int).sum = 0) (p : paren) : x.count p * 2 = x.length :=
+lemma two_mul_count_eq_len {x : list paren} (h : (x.map to_int).sum = 0) (p : paren) : 2 * x.count p = x.length :=
 begin
-  suffices : x.count paren.up * 2 = x.length, { cases p, { exact this, }, { rwa ← count_eq_of_sum_zero h, } },
-  rw [mul_two, ← list.paren.length_eq_count_sum, count_eq_of_sum_zero h],
+  suffices : 2 * x.count paren.up = x.length, { cases p, { exact this, }, { rwa ← count_eq_of_sum_zero h, } },
+  rw [two_mul, ← list.paren.length_eq_count_sum, count_eq_of_sum_zero h],
 end
 
 def dyck_words := {l // are_heights_nonneg l}
@@ -328,7 +330,7 @@ instance : has_lift dyck_words (list paren) := ⟨λ x, x.val⟩
 
 @[simp] lemma coe_mk (l : list paren) (p : are_heights_nonneg l) : ↑(⟨l, p⟩ : dyck_words) = l := rfl
 
-def dyck_words.nil : dyck_words := ⟨[], by simp [are_heights_nonneg]⟩
+def dyck_words.nil : dyck_words := ⟨[], are_heights_nonneg_nil⟩
 @[simp] lemma dyck_words.nil_val : (↑dyck_words.nil : list paren) = [] := rfl
 
 def dyck_words.append (x y : dyck_words) : dyck_words := ⟨_, are_heights_nonneg_append x.prop y.prop⟩
@@ -519,12 +521,18 @@ by { rw equiv.apply_eq_iff_eq_symm_apply, simp, }
 @[simp] lemma equiv_dyck_words_symm_right (x : paren.dyck_words) : equiv_dyck_words.symm x.right = (equiv_dyck_words.symm x).right :=
 by { rw equiv.apply_eq_iff_eq_symm_apply, simp, }
 
-lemma equiv_dyck_words_length (x : tree unit) : 2 * x.num_nodes = (↑(equiv_dyck_words x) : list paren).length :=
+lemma equiv_dyck_words_length (x : tree unit) : (↑(equiv_dyck_words x) : list paren).length = 2 * x.num_nodes :=
 begin
   induction x using tree.unit_rec_on with l r ih₁ ih₂,
   { simp, },
   simp [mul_add, ih₁, ih₂], ring,
 end
+
+lemma equiv_dyck_words_symm_num_nodes (x : paren.dyck_words) : (equiv_dyck_words.symm x).num_nodes = (↑x : list paren).length / 2 :=
+by simpa using congr_arg (/2) (equiv_dyck_words_length (equiv_dyck_words.symm x)).symm
+
+lemma equiv_dyck_words_num_nodes_eq_count (x : paren.dyck_words) (p : paren) : (↑x : list paren).count p = (equiv_dyck_words.symm x).num_nodes :=
+by { rw [equiv_dyck_words_symm_num_nodes, ← paren.two_mul_count_eq_len x.prop.2 p, nat.mul_div_right], dec_trivial, }
 
 end tree
 

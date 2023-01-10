@@ -156,35 +156,112 @@ polytime'.comp ![f, g] polytime'_drop $ λ i, by fin_cases i; simpa
 lemma polytime'_right : polytime₁' (λ x, (right_dyck_word $ x.map paren.to_bool.symm).map paren.to_bool) :=
 ((polytime'.nth 0).drop (polytime'.nth 0).left).tail.tail.of_eq $ λ v, by { simp [right_dyck_word, list.map_drop, list.tail_drop], } 
 
+lemma right {n f} (hf : @polytime' n f) : polytime' (λ v, (right_dyck_word $ (f v).map paren.to_bool.symm).map paren.to_bool) :=
+polytime'.comp (λ _, f) polytime'_right (λ _, hf)
+
 lemma polytime'_count_tt : polytime₁' (λ x, list.repeat tt (x.count tt)) :=
 ((polytime'.nth 0).foldl ((polytime'.nth 1).ite ((polytime'.nth 0).cons tt) (polytime'.nth 0)) polytime'.nil' 
   (by { simp, complexity, })).of_eq $ λ v,
 by { simp, induction v.head using list.reverse_rec_on with l e ih, { simp, }, cases e; simp [*], }
+
+lemma count_tt {n f} (hf : @polytime' n f) : polytime' (λ v, list.repeat tt $ (f v).count tt) :=
+polytime'.comp (λ _, f) polytime'_count_tt (λ _, hf)
+
+lemma iter {n f k s} (hf : polytime₁' f) (hk : @polytime' n k) (hs : @polytime' n s)
+  (hf' : polysize_fun (λ (n : ℕ) (s : list bool), f^[n] s)) :
+  polytime' (λ v, f^[(k v).length] (s v)) :=
+(hk.foldl (polytime'.comp _ hf (λ _, polytime'.nth 0)) hs begin
+  simp only [vector.nth_cons_zero, vector.head_of_fn, list.foldl_eq_iterate],
+  cases hf' with p hp, use p,
+  rintro ⟨(_|⟨a, (_|⟨b, x⟩)⟩), hx⟩, iterate 2 { exfalso, refine absurd hx _, dec_trivial, },
+  simp only [vector.head, vector.tail, polysize_vector_def, list.map, tree.polytime.uncurry_unary, size_list_fintype,
+    vector.to_list_map, vector.to_list_mk, list.sum_cons, ← add_assoc],
+  refine trans _ (p.eval_mono le_self_add),
+  simpa [function.has_uncurry.uncurry] using hp (a.length, b),
+end).of_eq $ λ v, by simp
+
+lemma _root_.vector.one_eq_head {α : Type*} (v : vector α 1) : v.head ::ᵥ vector.nil = v :=
+by { ext i, fin_cases i, simp, } 
+
+def wrap1 {f} (hf : @polytime' 1 f) : polytime₁' (λ x, f (x ::ᵥ vector.nil)) :=
+hf.of_eq $ λ v, by simp [vector.one_eq_head]
+
+open_locale tree
+
+lemma _root_.list.count_map_of_equiv {α β : Type*} [decidable_eq α] [decidable_eq β] (l : list α) (e : α ≃ β) (x : β) :
+  (l.map e).count x = l.count (e.symm x) :=
+by simpa using list.count_map_of_injective l ⇑e e.injective (e.symm x)
+
+-- We extract the inductive case of the iter step because it is large
+lemma of_tree_polytime_iter_case (f : tree unit → tree unit) (hf : polysize_fun (λ x : tree unit, f^[x.left.num_nodes] x.right))
+  (f' : list bool → list bool) (h₁ : polytime₁' f') (h₂ : ∀ (x : paren.dyck_words), 
+    f' (list.map paren.to_bool ↑x) = list.map paren.to_bool ↑(tree.equiv_dyck_words (f (tree.equiv_dyck_words.symm x)))) :
+  ∃ (g : list bool → list bool), polytime₁' g ∧ ∀ (x : paren.dyck_words), 
+    g (list.map paren.to_bool ↑x) = list.map paren.to_bool ↑(tree.equiv_dyck_words (
+      (λ x : tree unit, f^[x.left.num_nodes] x.right) (tree.equiv_dyck_words.symm x))) :=
+begin
+  set F : list bool → list bool := λ b, if paren.are_heights_nonneg (b.map paren.to_bool.symm) then f' b else [],
+  have hF : ∀ (x : list bool) (n : ℕ), paren.are_heights_nonneg (x.map paren.to_bool.symm) → (F^[n] x) = (f'^[n] x),
+  { rintros x n h,
+    induction n with n ih generalizing x, { refl, },
+    have : F x = f' x, { dsimp [F], simp [h], },
+    rw [function.iterate_succ_apply, ih], { simp [this], },
+    specialize h₂ ⟨_, h⟩, simp only [paren.coe_mk, list.map_map, equiv.self_comp_symm, list.map_id] at h₂, 
+    simp [this, h₂], exact subtype.prop _, },
+  have hF' : ∀ (x : list bool), ¬paren.are_heights_nonneg (x.map paren.to_bool.symm) → F x = [], { intros x H, dsimp [F], simp [H], },
+  have hf' : ∀ (x : paren.dyck_words) (n : ℕ), (f'^[n] $ (↑x : list paren).map paren.to_bool) = 
+    list.map paren.to_bool ↑(tree.equiv_dyck_words (f^[n] (tree.equiv_dyck_words.symm x))),
+  { intros x n, induction n with n ih generalizing x, { simp, }, simp [ih, h₂], },
+  have pF : polytime₁' F := ((polytime'.nth 0).is_balanced.ite h₁ polytime'.nil').of_eq (by simp), 
+  refine ⟨_, (iter pF (polytime'.nth 0).left.count_tt (polytime'.nth 0).right _).wrap1, _⟩,
+  { cases hf with pf hf,
+    have : ∀ (n : ℕ) (b : list bool), paren.are_heights_nonneg (b.map paren.to_bool.symm) →
+      (f'^[n] b).length ≤ 2 * pf.eval (n + b.length + 1),
+    { intros n b hb, 
+      suffices : (f'^[n] b).length ≤ 2 * pf.eval (n + b.length / 2 + 1), { refine this.trans _, mono*, exacts [nat.div_le_self _ _, zero_le'], },
+      specialize hf' ⟨_, hb⟩ n, specialize hf ((tencodable.encode n) △ tree.equiv_dyck_words.symm ⟨_, hb⟩),
+      simp [tree.equiv_dyck_words_symm_num_nodes] at hf' hf,
+      simpa [hf', tree.equiv_dyck_words_length] using hf, },
+    use 2 * pf.comp (polynomial.X + 1), rintro ⟨n, b⟩,
+    dsimp [function.has_uncurry.uncurry] at ⊢ hf,
+    by_cases H : paren.are_heights_nonneg (b.map paren.to_bool.symm),
+    { rw hF _ n H, simpa using this n _ H, },
+    cases n,
+    { have : b.length ≤ pf.eval (b.length + 1) := by simpa using (hf (tree.nil △ (tencodable.encode b.length))),
+      simp, linarith only [this], },
+    rw [function.iterate_succ_apply, hF' _ H, hF [] n dec_trivial],
+    specialize this n [] dec_trivial,
+    simp, refine this.trans _, mono*, exacts [nat.le_succ _, zero_le', zero_le'], }, 
+  intro x,
+  simp only [vector.nth_cons_nil, list.map_map, equiv.symm_comp_self, list.count_map_of_equiv,
+    list.map_id, left_dyck_word_spec, list.length_repeat, right_dyck_word_spec, tree.equiv_dyck_words_num_nodes_eq_count],
+  rw [hF, hf'], { simp, }, simpa using x.right.prop,
+end
 
 lemma of_tree_polytime {f : tree unit → tree unit} (hf : tree.polytime f) :
   ∃ f' : list bool → list bool, polytime₁' f' ∧ ∀ (x : paren.dyck_words),
     f' ((↑x : list paren).map paren.to_bool) = (↑(tree.equiv_dyck_words $ f (tree.equiv_dyck_words.symm x)) : list paren).map paren.to_bool :=
 begin
   induction hf,
-  case tree.polytime.nil { sorry { refine ⟨λ _, [], polytime'.nil', _⟩, simp, } },
-  case tree.polytime.id' { sorry { refine ⟨λ x, x, (polytime'.nth 0).of_eq _, _⟩; simp, } },
-  case tree.polytime.left { sorry { refine ⟨_, polytime'_left, _⟩, simp, } },
-  case tree.polytime.right { sorry { refine ⟨_, polytime'_right, _⟩, simp, } },
+  case tree.polytime.nil { { refine ⟨λ _, [], polytime'.nil', _⟩, simp, } },
+  case tree.polytime.id' { { refine ⟨λ x, x, (polytime'.nth 0).of_eq _, _⟩; simp, } },
+  case tree.polytime.left { { refine ⟨_, polytime'_left, _⟩, simp, } },
+  case tree.polytime.right { { refine ⟨_, polytime'_right, _⟩, simp, } },
   case tree.polytime.pair : f g _ _ ihf ihg
-  { sorry { rcases ihf with ⟨f', ihf, Hf⟩, rcases ihg with ⟨g', ihg, Hg⟩, 
+  { { rcases ihf with ⟨f', ihf, Hf⟩, rcases ihg with ⟨g', ihg, Hg⟩, 
     refine ⟨λ x, paren.up.to_bool :: (f' x) ++ paren.down.to_bool :: (g' x), 
       (ihf.cons paren.up.to_bool).append (ihg.cons paren.down.to_bool), _⟩,
     simp [Hf, Hg], } },
   case tree.polytime.comp : f g _ _ ihf ihg
-  { sorry { rcases ihf with ⟨f', ihf, Hf⟩, rcases ihg with ⟨g', ihg, Hg⟩,
+  { { rcases ihf with ⟨f', ihf, Hf⟩, rcases ihg with ⟨g', ihg, Hg⟩,
     refine ⟨λ x, f' (g' x), polytime'.comp (λ _ v, g' v.head) ihf (λ _, ihg), _⟩,
     simp [Hf, Hg], } },
   case tree.polytime.ite : f g h _ _ _ ihf ihg ihh
-  { sorry { rcases ihf with ⟨f', ihf, Hf⟩, rcases ihg with ⟨g', ihg, Hg⟩, rcases ihh with ⟨h', ihh, Hh⟩,
+  { { rcases ihf with ⟨f', ihf, Hf⟩, rcases ihg with ⟨g', ihg, Hg⟩, rcases ihh with ⟨h', ihh, Hh⟩,
     refine ⟨λ x, if (f' x).empty then g' x else h' x, ihf.ite_nil ihg ihh, _⟩,
     intro x, simp only [Hf],
     rcases f (tree.equiv_dyck_words.symm x) with (_|⟨⟨⟩, _, _⟩); simp [Hg, Hh], } },
-  sorry,
+  case tree.polytime.bounded_rec : f _ hf ih { rcases ih with ⟨f', h₁, h₂⟩, exact of_tree_polytime_iter_case f hf f' h₁ h₂, },
 end 
 
 instance : tencodable paren := tencodable.of_equiv bool paren.to_bool

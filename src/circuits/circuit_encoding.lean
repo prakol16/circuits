@@ -58,8 +58,11 @@ variables {α β U V W X : Type}
 def precircuit.to_finmap [fintype V] (cct : precircuit U V) : @finmap V (λ _, list (U ⊕ V)) :=
 finmap.of_fun cct.deps
 
-def precircuit.comp_finmap (c₁ : @finmap V (λ _, list (U ⊕ V))) (c₂ : @finmap X (λ _, list (W ⊕ X))) :
-  @finmap (W ⊕ X) (λ _, list (U ⊕ V ⊕ X)) := sorry
+def precircuit.comp_finmap (c₁ : @finmap V (λ _, list (U ⊕ V))) (c₂ : @finmap X (λ _, list (W ⊕ X))) 
+  (f : W → U ⊕ V) :
+  @finmap (V ⊕ X) (λ _, list (U ⊕ V ⊕ X)) :=
+(c₁.map $ λ v dv, dv.map (λ x, (equiv.sum_assoc U V X) (sum.inl x))).disj_union
+(c₂.map $ λ x dx, dx.map (λ wx, (equiv.sum_assoc U V X) (wx.map f id)))
 
 variables  [tencodable α] [tencodable β] [tencodable U] [tencodable V]
   [tencodable W] [tencodable X]
