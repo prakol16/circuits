@@ -58,6 +58,14 @@ by rw [← drop_one, drop_drop]
 
 end drop
 
+section count
+
+lemma count_map_of_equiv {α β : Type*} [decidable_eq α] [decidable_eq β] (l : list α) (e : α ≃ β) (x : β) :
+  (l.map e).count x = l.count (e.symm x) :=
+by simpa using l.count_map_of_injective ⇑e e.injective (e.symm x)
+
+end count
+
 end list
 
 namespace vector
@@ -69,6 +77,9 @@ lemma nth_one_eq_tail_head {α : Type*} {n} (v : vector α (n + 2)) :
 
 @[simp] lemma cons_cons_nth_one {α : Type*} {n} (v : vector α n) (a b : α) :
   (a ::ᵥ b ::ᵥ v).nth 1 = b := by simp [nth_one_eq_tail_head]
+
+lemma one_eq_head {α : Type*} (v : vector α 1) : v.head ::ᵥ vector.nil = v :=
+by { ext i, fin_cases i, simp, } 
 
 end vector
 

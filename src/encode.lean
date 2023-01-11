@@ -231,6 +231,11 @@ lemma subtype_encode {P : α → Prop} [decidable_pred P] (a : {x // P x}) :
 
 instance {n} : tencodable (vector α n) := subtype.tencodable _
 
+lemma encode_vec_nil : encode (vector.nil : vector α 0) = tree.nil := rfl
+
+lemma encode_vec_cons {n : ℕ} (x : α) (v : vector α n) :
+  encode (x ::ᵥ v) = (encode x) △ (encode v) := by { cases v, refl, }
+
 end subtype
 
 section fin
