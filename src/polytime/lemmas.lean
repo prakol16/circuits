@@ -98,27 +98,17 @@ theorem scanl_step_iterate {α : Type*} (f : β → α → β) (l : list α) (x 
   (scanl_step f)^[l.length] (l, [x]) = ([], (l.scanl f x).reverse) :=
 by { rw [scanl_step_iterate', ← @list.length_scanl _ _ f x l], simp, }
 
-theorem foldl_size_le [polysize α] [polysize β] (f : β → α → β) (p : ℕ → ℕ) (hp : monotone p)
-  (hf : ∀ x y, size (f x y) ≤ size x + p (size y)) (ls : list α) (x₀ : β) :
-  size (ls.foldl f x₀) ≤ size x₀ + ls.length * p (size ls) :=
-begin
-  induction ls with hd tl ih generalizing x₀, { simp, },
-  rw [list.foldl, list.length_cons, nat.succ_mul, ← add_assoc, add_right_comm],
-  refine (ih _).trans (add_le_add ((hf _ _).trans $ add_le_add_left (hp _) _) (mul_le_mul_left' (hp _) _));
-  simp; linarith only,
-end
-
-lemma list_scanl_rev [polysize α] [polysize β] [polysize γ] {lst : γ → list α} {acc : γ → β} {f : γ → β → α → β}
+lemma list_scanl_rev' [polysize α] [polysize β] [polysize γ] {lst : γ → list α} {acc : γ → β} {f : γ → β → α → β}
   (hlst : lst ∈ₑ PTIME) (hacc : acc ∈ₑ PTIME) (hf : f ∈ₑ PTIME)
-  (hf' : polysize_safe (λ (usf : γ × α) (sf : β), f usf.1 sf usf.2)) :
+  (hf' : polysize_fun (λ (ls : list α) (x), ls.foldl (f x) (acc x))) :
   polytime.mem (λ x : γ, ((lst x).scanl (f x) (acc x)).reverse) :=
 begin
   convert_to polytime.mem (λ x, ((scanl_step (f x))^[(lst x).length] (lst x, [acc x])).2),
   { simp [scanl_step_iterate], },
   refine complexity_class.mem.snd.comp _,
   apply iterate, complexity,
-  cases hf' with pf hpf, cases polytime.size_le hlst with pl hpl, cases polytime.size_le hacc with pa hpa,
-  use pl + (pl + 1) * (pa + pl * pf.comp (polynomial.X + pl) + 1),
+  cases hf' with pf hpf, cases polytime.size_le hlst with pl hpl,
+  use pl + (pl + 1) * (pf.comp (pl + polynomial.X) + 1),
   intros x m _,
   simp [scanl_step_iterate'], apply add_le_add,
   { exact (list.size_le_of_sublist ((lst x).drop_sublist _)).trans (hpl _), },
@@ -128,11 +118,25 @@ begin
   simp_rw list.mem_iff_nth_le,
   rintros e ⟨n, hn, rfl⟩,
   rw list.scanl_nth_le_eq_foldl,
-  refine (foldl_size_le (f x) (λ a, pf.eval (size (x, a))) (λ a b h, pf.eval_mono $ add_le_add_left h _) (λ b a, hpf (x, a) b) _ _).trans _,
-  simp, mono*,
-  { exact min_le_of_right_le ((lst x).length_le_size.trans (hpl _)), },
-  { exact (list.size_le_of_sublist (list.take_sublist _ _)).trans (hpl _), },
-  exacts [zero_le', zero_le'],
+  exact (hpf ((lst x).take n, x)).trans (pf.eval_mono $ add_le_add_right ((list.size_le_of_sublist (list.take_sublist _ _)).trans (hpl _)) _),
+end
+
+lemma list_scanl_rev [polysize α] [polysize β] [polysize γ] {lst : γ → list α} {acc : γ → β} {f : γ → β → α → β}
+  (hlst : lst ∈ₑ PTIME) (hacc : acc ∈ₑ PTIME) (hf : f ∈ₑ PTIME)
+  (hf' : polysize_safe (λ (usf : γ × α) (sf : β), f usf.1 sf usf.2)) :
+  polytime.mem (λ x : γ, ((lst x).scanl (f x) (acc x)).reverse) :=
+list_scanl_rev' hlst hacc hf
+  (polysize_safe.foldl polysize_fun.fst ((polytime.size_le hacc).comp polysize_fun.snd) 
+    (by { apply hf'.comp₃_1, complexity, }))
+
+lemma list_foldl' [polysize α] [polysize β] [polysize γ] {lst : γ → list α} {acc : γ → β} {f : γ → β → α → β}
+  (hlst : lst ∈ₑ PTIME) (hacc : acc ∈ₑ PTIME) (hf : f ∈ₑ PTIME)
+  (hf' : polysize_fun (λ (ls : list α) (x), ls.foldl (f x) (acc x))) :
+  polytime.mem (λ x : γ, (lst x).foldl (f x) (acc x)) :=
+begin
+  rw complexity_class.of_some,
+  convert complexity_class.head'.comp (list_scanl_rev' hlst hacc hf hf'),
+  ext x : 1, simp [list.scanl_last_eq_foldl],
 end
 
 @[complexity] lemma list_foldl [polysize α] [polysize β] [polysize γ] {lst : γ → list α} {acc : γ → β} {f : γ → β → α → β}

@@ -360,6 +360,25 @@ begin
   { refine (hf _ _).trans _, simp, }, { refine (hg _ _).trans _, simp, },
 end
 
+theorem foldl_size_le [polysize α] [polysize β] (f : β → α → β) (p : ℕ → ℕ) (hp : monotone p)
+  (hf : ∀ x y, size (f x y) ≤ size x + p (size y)) (ls : list α) (x₀ : β) :
+  size (ls.foldl f x₀) ≤ size x₀ + ls.length * p (size ls) :=
+begin
+  induction ls with hd tl ih generalizing x₀, { simp, },
+  rw [list.foldl, list.length_cons, nat.succ_mul, ← add_assoc, add_right_comm],
+  refine (ih _).trans (add_le_add ((hf _ _).trans $ add_le_add_left (hp _) _) (mul_le_mul_left' (hp _) _));
+  simp; linarith only,
+end
+
+lemma polysize_safe.foldl [polysize α] [polysize β] [polysize γ] {lst : γ → list α} {acc : γ → β} {f : γ → β → α → β} :
+  polysize_fun lst → polysize_fun acc → polysize_safe (λ (usf : γ × α) (sf : β), f usf.1 sf usf.2) →
+  polysize_fun (λ x, (lst x).foldl (f x) (acc x))
+| ⟨plst, hlst⟩ ⟨pacc, hacc⟩ ⟨pf, hf⟩ := ⟨pacc + plst * pf.comp (polynomial.X + plst), λ x, begin
+  refine (foldl_size_le (f x) (λ a, pf.eval (size (x, a))) (λ a b h, pf.eval_mono $ add_le_add_left h _) (λ b a, hf (x, a) b) _ _).trans _,
+  simp, mono*,
+  exacts [(lst x).length_le_size.trans (hlst _), zero_le', zero_le'],
+end⟩
+
 @[complexity] theorem polysize_safe.option_bind₁ {f : α → option γ} {g : α → β → γ → option δ} :
   polysize_fun f → polysize_safe (λ (usf : α × γ) (sf : β), g usf.1 sf usf.2) →
   polysize_safe (λ x y, (f x).bind (g x y))

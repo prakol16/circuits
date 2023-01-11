@@ -26,8 +26,13 @@ theorem to_polytime {n f} (hf : @polytime' n f) : f ∈ₑ PTIME :=
 begin
   induction hf,
   case polytime'.fold : n f hf hf' ih
-  { sorry, },
-  all_goals { sorry, }, -- complexity
+  { apply polytime.list_foldl', rotate 3,
+    { cases hf' with p hp, use p,
+      rintro ⟨ls, v⟩, rcases v.exists_eq_cons with ⟨vhd, tl, rfl⟩, specialize hp (ls ::ᵥ tl),
+      simp [function.has_uncurry.uncurry, polysize_vector_def] at hp ⊢,
+      exact hp.trans (p.eval_mono $ add_le_add_left le_add_self _), },
+    complexity, },
+  complexity,
 end
 
 abbreviation polytime₁' (f : list bool → list bool) : Prop := @polytime' 1 (λ v, f v.head)
@@ -58,7 +63,11 @@ polytime'.comp (λ _, f) polytime'.tail' (λ _, hf)
 lemma vtail {n f} (hf : @polytime' n f) : @polytime' (n + 1) (λ v, f v.tail) :=
 (polytime'.comp (λ (i : fin n) v, v.nth i.succ) hf (λ i, by simpa using polytime'.nth _)).of_eq (λ v, by { congr, ext i : 1, simp, })
 
-protected theorem foldl {n ls f acc} (hls : @polytime' n ls) (hf : @polytime' (n + 2) f)
+lemma _root_.vector.polysize_tail_le_self {α : Type*} [tencodable α] [polysize α] {n : ℕ} (v : vector α (n + 1)) :
+  polysize.size v.tail ≤ polysize.size v :=
+by { rcases v.exists_eq_cons with ⟨hd, tl, rfl⟩, simp [polysize_vector_def], }
+
+theorem foldl' {n ls f acc} (hls : @polytime' n ls) (hf : @polytime' (n + 2) f)
   (hacc : @polytime' n acc)
   (hr : polysize_fun (λ v : vector (list bool) (n + 2), v.head.foldl (λ acc' hd, f (acc' ::ᵥ [hd] ::ᵥ v.tail.tail)) v.tail.head)) :
   polytime' (λ v, (ls v).foldl (λ acc' hd, f (acc' ::ᵥ [hd] ::ᵥ v)) (acc v)) :=
@@ -67,6 +76,17 @@ protected theorem foldl {n ls f acc} (hls : @polytime' n ls) (hf : @polytime' (n
   refine fin.cases _ _, { simpa, },
   simpa using polytime'.nth,
 end)).of_eq $ λ v, by simp
+
+protected theorem foldl {n ls f acc} (hls : @polytime' n ls) (hf : @polytime' (n + 2) f)
+  (hacc : @polytime' n acc)
+  (hr : polysize_safe (λ (usf : vector (list bool) n × bool) (sf : list bool), f (sf ::ᵥ [usf.2] ::ᵥ usf.1))) :
+  polytime' (λ v, (ls v).foldl (λ acc' hd, f (acc' ::ᵥ [hd] ::ᵥ v)) (acc v)) :=
+foldl' hls hf hacc begin
+  apply polysize_safe.foldl, rotate 2,
+  { cases hr with pr hr, use pr, rintro ⟨x, hd⟩ acc, specialize hr (x.tail.tail, hd) acc, 
+    simp at hr ⊢, exact hr.trans (add_le_add_left (pr.eval_mono $ x.tail.polysize_tail_le_self.trans x.polysize_tail_le_self) _), },
+  complexity,
+end
 
 theorem polytime'_reverse : @polytime' 1 (λ v, v.head.reverse) :=
 ((polytime'.nth 0).foldl ((polytime'.nth 1).cons₂ (polytime'.nth 0)) polytime'.nil' 
@@ -109,6 +129,14 @@ begin
   cases c v; simp [nat.succ_eq_add_one, @eq_comm ℕ 0],
 end
 
+theorem ite_eq {n c f g} (hc : @polytime' n c) (x : list bool) (hf : @polytime' n f) (hg : @polytime' n g) :
+  polytime' (λ v, if c v = x then f v else g v) :=
+begin
+  induction x with hd tl ih generalizing c, { refine (hc.ite_nil hf hg).of_eq _, simp [list.empty_iff_eq_nil], },
+  refine (hc.ite_nil hg $ hc.ite_head hd (ih hc.tail) hg).of_eq (λ v, _),
+  cases c v, { simp, }, { simp [ite_and], }
+end
+
 lemma polytime'_sum_parens : polytime₁' (λ x, list.repeat tt $ sum_parens (x.map paren.to_bool.symm)) :=
 ((polytime'.nth 0).foldl 
    ((polytime'.nth 0).ite_nil polytime'.nil' -- if acc = 0
@@ -141,7 +169,7 @@ lemma polytime'_left : polytime₁' (λ x, (left_dyck_word $ x.map paren.to_bool
   ((polytime'.nth 0).foldl (
     (polytime'.nth 0).ite_nil ((polytime'.nth 0).append $ polytime'.nth 1) $
     (polytime'.nth 0).is_balanced.ite (polytime'.nth 0) ((polytime'.nth 0).append $ polytime'.nth 1)
-  ) polytime'.nil' (by { simp, sorry, })).tail.init).of_eq $ λ v, begin
+  ) polytime'.nil' (by { simp, complexity, })).tail.init).of_eq $ λ v, begin
   simp only [vector.nth_zero, list.empty_iff_eq_nil, left_dyck_word, list.map_eq_nil],
   split_ifs, { simp [left_dyck_word], },
   simp only [list.map_tail, list.map_init], congr,
@@ -176,7 +204,7 @@ polytime'.comp (λ _, f) polytime'_count_tt (λ _, hf)
 lemma iter {n f k s} (hf : polytime₁' f) (hk : @polytime' n k) (hs : @polytime' n s)
   (hf' : polysize_fun (λ (n : ℕ) (s : list bool), f^[n] s)) :
   polytime' (λ v, f^[(k v).length] (s v)) :=
-(hk.foldl (polytime'.comp _ hf (λ _, polytime'.nth 0)) hs begin
+(hk.foldl' (polytime'.comp _ hf (λ _, polytime'.nth 0)) hs begin
   simp only [vector.nth_cons_zero, vector.head_of_fn, list.foldl_eq_iterate],
   cases hf' with p hp, use p,
   rintro ⟨(_|⟨a, (_|⟨b, x⟩)⟩), hx⟩, iterate 2 { exfalso, refine absurd hx _, dec_trivial, },
@@ -272,9 +300,20 @@ lemma encode_bool {n f} (hf : @polytime' n f) : polytime' (λ v, list.map paren.
 (hf.ite (const' $ list.map paren.to_bool ↑(tree.equiv_dyck_words (encode tt)))
   (const' $ list.map paren.to_bool ↑(tree.equiv_dyck_words (encode ff)))).of_eq $ λ v, by cases (f v).head; simp
 
+instance : tencodable paren := tencodable.of_equiv bool paren.to_bool
+
+lemma _root_.complexity_class.mem₂_iff {α β γ : Type} [tencodable α] [tencodable β] [tencodable γ]
+  {f : α × β → γ} {C : complexity_class} : f ∈ₑ C ↔ (λ (x : α) (y : β), f (x, y)) ∈ₑ C :=
+by { dsimp only [complexity_class.mem, function.has_uncurry.uncurry, id], simp only [prod.mk.eta], } 
+
 lemma encode_list_aux : polytime₁' (λ b : list bool, list.map paren.to_bool ↑(tree.equiv_dyck_words (encode b))) :=
 ((polytime'.nth 0).reverse.foldl ((polytime'.nth 1).encode_bool.pair (polytime'.nth 0))
-  nil' (by { simp, sorry, })).of_eq $ λ v, begin
+  nil' (begin
+    simp, refine polysize_safe.cons _ (polysize_safe.append_left (polytime.size_le _) _), swap,
+    { rw [complexity_class.mem₂_iff, complexity_class.mem.swap_args₂, complexity_class.iff_fintype],
+      intro x, simpa [flip] using polytime.const _, },
+    complexity,
+  end)).of_eq $ λ v, begin
   simp only [list.head, list.map, vector.cons_cons_nth_one, vector.cons_head,
     vector.nth_cons_zero, list.cons_append, vector.nth_zero, list.foldl_reverse],
   induction v.head with hd tl ih, { simp [tencodable.encode_nil], },
@@ -289,12 +328,24 @@ lemma encode_vec : ∀ (n : ℕ), @polytime' n (λ v, list.map paren.to_bool ↑
 | (n + 1) := ((polytime'.nth 0).encode_list.pair (encode_vec n).vtail).of_eq 
   (λ v, by { conv_rhs { rw [← v.cons_head_tail, tencodable.encode_vec_cons], }, simp, })
 
-lemma of_polytime_aux {n : ℕ} {f : vector (list bool) n → tree unit} :
-  f ∈ₑ PTIME → polytime' (λ v, list.map paren.to_bool ↑(tree.equiv_dyck_words (f v)))
+lemma of_polytime_aux {n : ℕ} {α : Type} [tencodable α] {f : vector (list bool) n → α} :
+  f ∈ₑ PTIME → polytime' (λ v, list.map paren.to_bool ↑(tree.equiv_dyck_words (encode $ f v)))
 | ⟨f', pf, hf⟩ := let ⟨g, pg, hg⟩ := of_tree_polytime pf in by simpa [hg, hf] using polytime'.comp _ pg (λ _, encode_vec n)
 
 @[complexity] lemma _root_.polytime_unary_nat_sum : (@list.sum ℕ _ _) ∈ₑ PTIME :=
 by { delta list.sum, complexity, }
+
+lemma _root_.list.iterate_append_nth_eq_self {α : Type*} (l : list α) (n : ℕ) :
+  (λ x : list α, x ++ (l.nth x.length).to_list)^[n] [] = l.take n :=
+begin
+  induction n with n ih, { simp, },
+  rw [function.iterate_succ_apply', ih, list.take_succ, list.length_take, min_def],
+  split_ifs with h, { refl, },
+  push_neg at h, rw [list.nth_eq_none_iff.mpr h.le, list.nth_eq_none_iff.mpr rfl.le],
+end
+
+lemma _root_.option.to_list_length_le_one {α : Type*} (l : option α) :
+  l.to_list.length ≤ 1 := by cases l; simp [option.to_list]
 
 lemma of_nth {n : ℕ} {f : vector (list bool) n → list bool}
   (h₁ : @polytime' (n + 1) (λ v, ((f v.tail).nth v.head.length).to_list))
@@ -303,14 +354,32 @@ begin
   cases h₂ with p hp, simp [polysize.size] at hp,
   obtain ⟨B, pB, hB⟩ : ∃ B : vector (list bool) n → list bool, polytime' B ∧
     ∀ v, (f v).length ≤ (B v).length,
-  sorry { refine ⟨_, of_polytime_aux (show (λ v : vector (list bool) n, encode $
+  { refine ⟨_, of_polytime_aux (show (λ v : vector (list bool) n,
       p.eval (v.to_list.map list.length).sum) ∈ₑ PTIME, by complexity), λ v, (hp v).trans _⟩,
     simpa [tree.equiv_dyck_words_length] using nat.le_mul_of_pos_left (nat.zero_lt_succ _ : 0 < 2), }, 
-  have : polytime' (λ (v : vector (list bool) (n + 2)), v.head ++ ((f v.tail.tail).nth v.head.length).to_list),
-  {  },
+  replace h₁ : polytime' (λ (v : vector (list bool) (n + 2)), ((f v.tail.tail).nth v.head.length).to_list),
+  { refine (@polytime'.comp (n + 2) (n + 1) _ (by { refine fin.cases _ _, exacts [vector.head, λ n v, v.nth n.succ.succ], }) h₁ _).of_eq (λ v, _),
+    { refine fin.cases _ _, { simpa using @polytime'.nth (n + 2) 0, }, { intro i, simpa using polytime'.nth _, }, },
+    simp, congr, ext i : 1, simp, },
+  refine (pB.foldl ((polytime'.nth 0).append h₁) polytime'.nil' _).of_eq (λ v, _),
+  { simp, use 1, intros x y, simpa using option.to_list_length_le_one _, }, { simp [list.iterate_append_nth_eq_self, list.take_all_of_le (hB v)], },
 end
 
-instance : tencodable paren := tencodable.of_equiv bool paren.to_bool
+lemma to_list {n : ℕ} {f : vector (list bool) n → option bool} (hf : f ∈ₑ PTIME) :
+  polytime' (λ v, (f v).to_list) :=
+((of_polytime_aux hf).ite_eq (list.map paren.to_bool ↑(tree.equiv_dyck_words (encode (none : option bool))))
+  polytime'.nil' $
+  (of_polytime_aux hf).ite_eq (list.map paren.to_bool ↑(tree.equiv_dyck_words (encode (some ff))))
+  (polytime'.const' [ff]) (polytime'.const' [tt])).of_eq $ λ v, by rcases f v with (_|_|_); refl
+
+@[complexity] lemma _root_.polytime.list_nth {α : Type} [tencodable α] : @list.nth α ∈ₑ PTIME :=
+by { complexity using λ l n, (l.drop n).head', rw [← list.nth_zero, list.nth_drop], refl, }
+
+@[complexity] lemma of_polytime {n : ℕ} {f : vector (list bool) n → list bool} (hf : f ∈ₑ PTIME) : polytime' f :=
+of_nth (to_list $ by complexity) (polytime.size_le hf)
+
+lemma iff_polytime {n : ℕ} {f : vector (list bool) n → list bool} :
+  polytime' f ↔ f ∈ₑ PTIME := ⟨to_polytime, of_polytime⟩
 
 lemma _root_.polytime.equiv_dyck_words : (λ x : tree unit, (↑(tree.equiv_dyck_words x) : list paren)) ∈ₑ PTIME :=
 begin
