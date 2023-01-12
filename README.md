@@ -159,8 +159,7 @@ example : (@zip α β) ∈ₑ PTIME :=
 begin
   complexity using 
     λ l₁ l₂, l₁.stack_rec (λ l₂' : list β, []) (λ x xs l₂', l₂'.tail)
-    (λ ih x xs l₂', @list.cases_on _ (λ _, list (α × β)) l₂' [] (λ y ys
-      (x, y) :: ih)) l₂,
+    (λ ih x xs l₂', @list.cases_on _ (λ _, list (α × β)) l₂' [] (λ y ys (x, y) :: ih)) l₂,
   -- Must discharge the goal `zip l₁ l₂ = list.stack_rec ... l₁ l₂`
   induction l₁ generalizing l₂; cases l₂; simp [*],
 end
