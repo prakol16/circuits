@@ -114,7 +114,7 @@ def stack_rec {α : Type} {β : Type} (base : α → β)
 
 This is a very general notion of recursion, which includes most kinds of basic structural recursion. For example, almost all common list operations (fold, filter, map, zip, etc.) can be converted to use `stack_rec` in a very straightforward way. Similarly, binary number addition and multiplication are also in this form. A future goal is to do this conversion automatically (we will see in the next section that it is very mechanical).
 
-Thus, showing that `stack_rec` runs in polynomial time (subject to certain `polysize_safe` conditions) allows us to do most structural recursion easily.
+Thus, showing that `stack_rec` runs in polynomial time (subject to certain `polysize_safe` conditions) allows us to do most structural recursion easily. Note that in some sense, `stack_rec` on trees is already the most "general" kind of recursion (branching factor > 1). In particular, since all data types are encoded as trees, if the encoding is natural, then any data type's `stack_rec` will be a function of `tree.stack_rec`. Thus, in the primrec mathlib PR, once we show that `stack_rec` is primitive recursive for trees, we can quickly port it to lists, nat, etc. In the polynomial-time case, unfortunately, it is a little more subtle, though it should still be doable. In this repository, however, we have simply manually proven `stack_rec` is polytime for lists (separately from trees).
 
 #### Worked example (list.zip) 
 
@@ -135,8 +135,7 @@ Thus, we can prove:
 theorem zip_eq_stack_rec (l₁ : list α) (l₂ : list β) :
   zip l₁ l₂ = l₁.stack_rec (λ l₂' : list β, []) -- base
     (λ x xs l₂', l₂'.tail) -- pre
-    (λ ih x xs l₂', @list.cases_on _ (λ _, list (α × β)) l₂' [] 
-      (λ y ys, (x, y) :: ih)) -- post
+    (λ ih x xs l₂', @list.cases_on _ (λ _, list (α × β)) l₂' [] (λ y ys, (x, y) :: ih)) -- post
     l₂ :=
 by induction l₁ generalizing l₂; cases l₂; simp [*]
 ```
@@ -166,3 +165,27 @@ begin
   induction l₁ generalizing l₂; cases l₂; simp [*],
 end
 ```
+
+## Files
+
+Here is a more detailed overview of the organization of the project:
+    - `misc.lean`: Miscellaneous helpful lemmas about lists, vectors, etc.
+    - `tree.lean`: Defines some functions on binary trees. The same as [this PR](https://github.com/leanprover-community/mathlib/pulls/prakol16)
+    - `encode.lean`: Defines `tencodable`, which is `encodable` but  for `tree unit`'s
+    - `stack_rec.lean`: Defines `stack_rec` for many common types. In addition, shows the very important result that `stack_rec` on trees can be simulated in by an iterative process which keeps explicit track of the stack.
+    - `catalan.lean`: Combinatorial results about lists of balanced parentheses and their equivalence with trees.
+    - `complexity_class/`
+        - `basic.lean`: Defines a functional class to be a collection of functions `f : tree unit → tree unit` closed under composition and containing some basic functions: `left`, `right`, `pair`, `nil`, `id`, `ite`, etc. Proves various composition lemmas needed before the tactic is set up.
+        - `tactic.lean`: Defines the `complexity` tactic
+        - `lemmas.lean`: A collection of basic facts about functions which can be computed in essentially constant time.
+        - `stack_rec.lean`: Shows that a single step of the iterative method for computing `stack_rec` for trees runs in constant time. This is separated because there is a lot of casework (discharged automatically by `complexity`) that takes a while to elaborate.
+    - `polytime/`
+        - `size.lean`: Defines what it means for a function to be `polysize_safe` (see above) and `polysize_fun` (have polynomial-size growth)
+        - `basic.lean`: Basic facts about `PTIME`, the class of polynomial time functions, such as the fact that they are all `polysize_fun`
+        - `stack_rec_size.lean`: Shows that intermediate results in `stack_rec` have polynomially-bounded size (will probably be refactored)
+        - `lemmas.lean`: Lots of functions about lists and trees shown to be in PTIME
+        - `list_basis.lean`: Proves the equivalence of `polytime'` (the list-based polynomial time definition) and `PTIME`
+        - `example.lean`: Contains the `zip` example from this README
+    - `circuits/`
+        - `basic.lean`: Defines circuits, circuit evaluation and composition of circuits
+        - `circuit_encoding.lean`: WIP
