@@ -10,9 +10,7 @@ open_locale complexity_class
 theorem zip_eq_stack_rec (l₁ : list α) (l₂ : list β) :
   zip l₁ l₂ = l₁.stack_rec (λ l₂' : list β, []) (λ x xs l₂', l₂'.tail)
     (λ ih x xs l₂', @list.cases_on _ (λ _, list (α × β)) l₂' [] (λ y ys, (x, y) :: ih)) l₂ :=
-begin
-  induction l₁ generalizing l₂; cases l₂; simp [*],
-end
+by induction l₁ generalizing l₂; cases l₂; simp [*]
 
 example : (@zip α β) ∈ₑ PTIME :=
 begin
@@ -21,10 +19,3 @@ begin
   induction l₁ generalizing l₂; cases l₂; simp [*],
 end
 
-example : (@list.mem α) ∈ₚ PTIME :=
-begin
-  classical, rw ← complexity_class.mem_iff_mem_rel,
-  complexity using λ x l, l.foldr (λ hd acc, (x = hd) || acc) ff,
-  { use 0, simp, },
-  induction l; simp [*, list.mem],
-end
