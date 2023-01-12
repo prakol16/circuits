@@ -169,23 +169,23 @@ end
 ## Files
 
 Here is a more detailed overview of the organization of the project:
-    - `misc.lean`: Miscellaneous helpful lemmas about lists, vectors, etc.
-    - `tree.lean`: Defines some functions on binary trees. The same as [this PR](https://github.com/leanprover-community/mathlib/pulls/prakol16)
-    - `encode.lean`: Defines `tencodable`, which is `encodable` but  for `tree unit`'s
-    - `stack_rec.lean`: Defines `stack_rec` for many common types. In addition, shows the very important result that `stack_rec` on trees can be simulated in by an iterative process which keeps explicit track of the stack.
-    - `catalan.lean`: Combinatorial results about lists of balanced parentheses and their equivalence with trees.
-    - `complexity_class/`
-        - `basic.lean`: Defines a functional class to be a collection of functions `f : tree unit → tree unit` closed under composition and containing some basic functions: `left`, `right`, `pair`, `nil`, `id`, `ite`, etc. Proves various composition lemmas needed before the tactic is set up.
-        - `tactic.lean`: Defines the `complexity` tactic
-        - `lemmas.lean`: A collection of basic facts about functions which can be computed in essentially constant time.
-        - `stack_rec.lean`: Shows that a single step of the iterative method for computing `stack_rec` for trees runs in constant time. This is separated because there is a lot of casework (discharged automatically by `complexity`) that takes a while to elaborate.
-    - `polytime/`
-        - `size.lean`: Defines what it means for a function to be `polysize_safe` (see above) and `polysize_fun` (have polynomial-size growth)
-        - `basic.lean`: Basic facts about `PTIME`, the class of polynomial time functions, such as the fact that they are all `polysize_fun`
-        - `stack_rec_size.lean`: Shows that intermediate results in `stack_rec` have polynomially-bounded size (will probably be refactored)
-        - `lemmas.lean`: Lots of functions about lists and trees shown to be in PTIME
-        - `list_basis.lean`: Proves the equivalence of `polytime'` (the list-based polynomial time definition) and `PTIME`
-        - `example.lean`: Contains the `zip` example from this README
-    - `circuits/`
-        - `basic.lean`: Defines circuits, circuit evaluation and composition of circuits
-        - `circuit_encoding.lean`: WIP
+- `misc.lean`: Miscellaneous helpful lemmas about lists, vectors, etc.
+- `tree.lean`: Defines some functions on binary trees. The same as [this PR](https://github.com/leanprover-community/mathlib/pulls/prakol16)
+- `encode.lean`: Defines `tencodable`, which is `encodable` but  for `tree unit`'s
+- `stack_rec.lean`: Defines `stack_rec` for many common types. In addition, shows the very important result that `stack_rec` on trees can be simulated in by an iterative process which keeps explicit track of the stack.
+- `catalan.lean`: Combinatorial results about lists of balanced parentheses and their equivalence with trees.
+- `complexity_class/`
+    - `basic.lean`: Defines a functional class to be a collection of functions `f : tree unit → tree unit` closed under composition and containing some basic functions: `left`, `right`, `pair`, `nil`, `id`, `ite`, etc. Proves various composition lemmas needed before the tactic is set up.
+    - `tactic.lean`: Defines the `complexity` tactic
+    - `lemmas.lean`: A collection of basic facts about functions which can be computed in essentially constant time.
+    - `stack_rec.lean`: Shows that a single step of the iterative method for computing `stack_rec` for trees runs in constant time. This is separated because there is a lot of casework (discharged automatically by `complexity`) that takes a while to elaborate.
+- `polytime/`
+    - `size.lean`: Defines what it means for a function to be `polysize_safe` (see above) and `polysize_fun` (have polynomial-size growth)
+    - `basic.lean`: Basic facts about `PTIME`, the class of polynomial time functions, such as the fact that they are all `polysize_fun`
+    - `stack_rec_size.lean`: Shows that intermediate results in `stack_rec` have polynomially-bounded size (will probably be refactored)
+    - `lemmas.lean`: Lots of functions about lists and trees shown to be in PTIME
+    - `list_basis.lean`: Proves the equivalence of `polytime'` (the list-based polynomial time definition) and `PTIME`
+    - `example.lean`: Contains the `zip` example from this README
+- `circuits/`
+    - `basic.lean`: Defines circuits, circuit evaluation and composition of circuits
+    - `circuit_encoding.lean`: WIP
