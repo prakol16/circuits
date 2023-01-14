@@ -61,6 +61,10 @@ lemma mem_iff_mem_rel {f : α → β → Prop} [∀ x y, decidable (f x y)] :
   ((λ x y, (f x y : bool))) ∈ₑ C ↔ f ∈ₚ C :=
 by { convert mem_iff_mem_rel_aux, ext, congr, }
 
+lemma mem₂_iff {α β γ : Type} [tencodable α] [tencodable β] [tencodable γ]
+  {f : α × β → γ} {C : complexity_class} : f ∈ₑ C ↔ (λ (x : α) (y : β), f (x, y)) ∈ₑ C :=
+by { dsimp only [mem, has_uncurry.uncurry, _root_.id], simp only [prod.mk.eta], } 
+
 @[simp] lemma prop_iff_mem {f : tree unit → tree unit} :
   C.prop f ↔ f ∈ₑ C :=
 ⟨λ pf, ⟨f, pf, λ _, rfl⟩, λ ⟨f', pf, hf⟩, by { convert pf, ext x, exact (hf x).symm, }⟩

@@ -186,6 +186,12 @@ instance {n : ℕ} : polysize (vector α n) :=
 
 lemma polysize_vector_def {n} (v : vector α n) : size v = (v.map size).to_list.sum := rfl
 
+
+lemma _root_.vector.polysize_tail_le_self {n : ℕ} (v : vector α (n + 1)) :
+  polysize.size v.tail ≤ polysize.size v :=
+by { rcases v.exists_eq_cons with ⟨hd, tl, rfl⟩, simp [polysize_vector_def], }
+
+
 -- Equal to `default_polysize` but more useful defeq
 instance : polysize ℕ :=
 { size := λ n, n,

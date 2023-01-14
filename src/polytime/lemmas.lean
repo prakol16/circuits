@@ -226,6 +226,9 @@ begin
   { simp, }, { simp [ih], },
 end
 
+@[complexity] lemma unary_nat_sum : (@list.sum ℕ _ _) ∈ₑ PTIME :=
+by { delta list.sum, complexity, }
+
 @[complexity] lemma list_ordered_insert {r : γ → α → α → Prop} [∀ x, decidable_rel (r x)] {a : γ → α} {ls : γ → list α} (hr : r ∈ₚ PTIME)
   (he : a ∈ₑ PTIME) (hls : ls ∈ₑ PTIME) : (λ x, (ls x).ordered_insert (r x) (a x)) ∈ₑ PTIME :=
 begin
@@ -274,6 +277,9 @@ end
 
 @[complexity] lemma list_nodup : (@list.nodup α) ∈ₚ PTIME :=
 by { dunfold list.nodup, complexity, }
+
+@[complexity] lemma _root_.polytime.list_nth {α : Type} [tencodable α] : @list.nth α ∈ₑ PTIME :=
+by { complexity using λ l n, (l.drop n).head', rw [← list.nth_zero, list.nth_drop], refl, }
 
 end list
 

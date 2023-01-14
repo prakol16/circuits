@@ -63,10 +63,6 @@ polytime'.comp (λ _, f) polytime'.tail' (λ _, hf)
 lemma vtail {n f} (hf : @polytime' n f) : @polytime' (n + 1) (λ v, f v.tail) :=
 (polytime'.comp (λ (i : fin n) v, v.nth i.succ) hf (λ i, by simpa using polytime'.nth _)).of_eq (λ v, by { congr, ext i : 1, simp, })
 
-lemma _root_.vector.polysize_tail_le_self {α : Type*} [tencodable α] [polysize α] {n : ℕ} (v : vector α (n + 1)) :
-  polysize.size v.tail ≤ polysize.size v :=
-by { rcases v.exists_eq_cons with ⟨hd, tl, rfl⟩, simp [polysize_vector_def], }
-
 theorem foldl' {n ls f acc} (hls : @polytime' n ls) (hf : @polytime' (n + 2) f)
   (hacc : @polytime' n acc)
   (hr : polysize_fun (λ v : vector (list bool) (n + 2), v.head.foldl (λ acc' hd, f (acc' ::ᵥ [hd] ::ᵥ v.tail.tail)) v.tail.head)) :
@@ -302,10 +298,6 @@ lemma encode_bool {n f} (hf : @polytime' n f) : polytime' (λ v, list.map paren.
 
 instance : tencodable paren := tencodable.of_equiv bool paren.to_bool
 
-lemma _root_.complexity_class.mem₂_iff {α β γ : Type} [tencodable α] [tencodable β] [tencodable γ]
-  {f : α × β → γ} {C : complexity_class} : f ∈ₑ C ↔ (λ (x : α) (y : β), f (x, y)) ∈ₑ C :=
-by { dsimp only [complexity_class.mem, function.has_uncurry.uncurry, id], simp only [prod.mk.eta], } 
-
 lemma encode_list_aux : polytime₁' (λ b : list bool, list.map paren.to_bool ↑(tree.equiv_dyck_words (encode b))) :=
 ((polytime'.nth 0).reverse.foldl ((polytime'.nth 1).encode_bool.pair (polytime'.nth 0))
   nil' (begin
@@ -332,21 +324,6 @@ lemma of_polytime_aux {n : ℕ} {α : Type} [tencodable α] {f : vector (list bo
   f ∈ₑ PTIME → polytime' (λ v, list.map paren.to_bool ↑(tree.equiv_dyck_words (encode $ f v)))
 | ⟨f', pf, hf⟩ := let ⟨g, pg, hg⟩ := of_tree_polytime pf in by simpa [hg, hf] using polytime'.comp _ pg (λ _, encode_vec n)
 
-@[complexity] lemma _root_.polytime_unary_nat_sum : (@list.sum ℕ _ _) ∈ₑ PTIME :=
-by { delta list.sum, complexity, }
-
-lemma _root_.list.iterate_append_nth_eq_self {α : Type*} (l : list α) (n : ℕ) :
-  (λ x : list α, x ++ (l.nth x.length).to_list)^[n] [] = l.take n :=
-begin
-  induction n with n ih, { simp, },
-  rw [function.iterate_succ_apply', ih, list.take_succ, list.length_take, min_def],
-  split_ifs with h, { refl, },
-  push_neg at h, rw [list.nth_eq_none_iff.mpr h.le, list.nth_eq_none_iff.mpr rfl.le],
-end
-
-lemma _root_.option.to_list_length_le_one {α : Type*} (l : option α) :
-  l.to_list.length ≤ 1 := by cases l; simp [option.to_list]
-
 lemma of_nth {n : ℕ} {f : vector (list bool) n → list bool}
   (h₁ : @polytime' (n + 1) (λ v, ((f v.tail).nth v.head.length).to_list))
   (h₂ : polysize_fun f) : polytime' f :=
@@ -371,9 +348,6 @@ lemma to_list {n : ℕ} {f : vector (list bool) n → option bool} (hf : f ∈�
   polytime'.nil' $
   (of_polytime_aux hf).ite_eq (list.map paren.to_bool ↑(tree.equiv_dyck_words (encode (some ff))))
   (polytime'.const' [ff]) (polytime'.const' [tt])).of_eq $ λ v, by rcases f v with (_|_|_); refl
-
-@[complexity] lemma _root_.polytime.list_nth {α : Type} [tencodable α] : @list.nth α ∈ₑ PTIME :=
-by { complexity using λ l n, (l.drop n).head', rw [← list.nth_zero, list.nth_drop], refl, }
 
 @[complexity] lemma of_polytime {n : ℕ} {f : vector (list bool) n → list bool} (hf : f ∈ₑ PTIME) : polytime' f :=
 of_nth (to_list $ by complexity) (polytime.size_le hf)

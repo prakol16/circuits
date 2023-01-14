@@ -66,6 +66,19 @@ by simpa using l.count_map_of_injective ⇑e e.injective (e.symm x)
 
 end count
 
+section take
+
+lemma iterate_append_nth_eq_self {α : Type*} (l : list α) (n : ℕ) :
+  (λ x : list α, x ++ (l.nth x.length).to_list)^[n] [] = l.take n :=
+begin
+  induction n with n ih, { simp, },
+  rw [function.iterate_succ_apply', ih, take_succ, length_take, min_def],
+  split_ifs with h, { refl, },
+  push_neg at h, rw [nth_eq_none_iff.mpr h.le, nth_eq_none_iff.mpr rfl.le],
+end
+
+end take
+
 end list
 
 namespace vector
@@ -79,9 +92,16 @@ lemma nth_one_eq_tail_head {α : Type*} {n} (v : vector α (n + 2)) :
   (a ::ᵥ b ::ᵥ v).nth 1 = b := by simp [nth_one_eq_tail_head]
 
 lemma one_eq_head {α : Type*} (v : vector α 1) : v.head ::ᵥ vector.nil = v :=
-by { ext i, fin_cases i, simp, } 
+by { ext i, fin_cases i, simp, }
 
 end vector
+
+namespace option
+
+lemma to_list_length_le_one {α : Type*} (l : option α) :
+  l.to_list.length ≤ 1 := by cases l; simp [to_list]
+
+end option
 
 namespace tree
 
