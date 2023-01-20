@@ -171,6 +171,7 @@ by { simp_rw ← list.foldl_reverse, complexity, }
  (λ x, (lst x).map (f x)) ∈ₑ PTIME :=
 by { complexity using (λ x, (lst x).foldr (λ hd acc, (f x hd) :: acc) []), induction lst x; simp [*], }
 
+
 @[complexity] theorem list_all_some : (@list.all_some α) ∈ₑ PTIME :=
 begin
   complexity using λ l, l.foldr (λ hd' acc', hd'.bind (λ hd, acc'.map (λ acc, hd :: acc))) (some []),
