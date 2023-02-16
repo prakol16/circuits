@@ -1,4 +1,5 @@
 import circuits.circuit_encoding
+import polytime.data_structures.finset
 
 namespace function
 /- Note that Lean fails to infer something like

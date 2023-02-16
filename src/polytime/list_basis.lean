@@ -1,4 +1,4 @@
-import polytime.lemmas
+import polytime.data_structures.list
 import catalan
 
 open_locale complexity_class
