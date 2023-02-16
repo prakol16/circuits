@@ -219,7 +219,7 @@ end
 @[complexity] lemma list_nodup : (@list.nodup α) ∈ₚ PTIME :=
 by { dunfold list.nodup, complexity, }
 
-@[complexity] lemma _root_.polytime.list_nth {α : Type} [tencodable α] : @list.nth α ∈ₑ PTIME :=
+@[complexity] lemma list_nth {α : Type} [tencodable α] : @list.nth α ∈ₑ PTIME :=
 by { complexity using λ l n, (l.drop n).head', rw [← list.nth_zero, list.nth_drop], refl, }
 
 end polytime

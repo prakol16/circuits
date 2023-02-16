@@ -71,7 +71,7 @@ C.mem_dep_iff_comp_eq_encode (λ x (y : list (β x)), y.map encode) (λ x y, by 
 end dep
 
 /-- A function which is encoded as a table -/
-structure complexity_class.table_fun (α β : Type*) :=
+structure table_fun (α β : Type*) :=
 (to_fun : α → β)
 
 namespace table_fun
@@ -99,6 +99,8 @@ def map (f : α [→] β) (g : β → γ) : α [→] γ := ⟨λ x, g (f x)⟩
 @[simps]
 def comp (f : α [→] β) (g : γ [→] α) : γ [→] β := ⟨λ x, f (g x)⟩
 
+def to_finmap [fintype α] (f : α [→] β) : @finmap α (λ _, β) := finmap.of_fun f 
+
 def finmap_equiv_fun [fintype α] [decidable_eq α] :
   {x : @finmap α (λ _, β) // ∀ k : α, k ∈ x} ≃ (α → β) :=
 { to_fun := λ f x, @option.get _ ((↑f : finmap _).lookup x) (finmap.lookup_is_some.mpr $ f.prop x),
@@ -115,5 +117,14 @@ lemma encode_table_fun (f : α [→] β) : encode f = encode (finmap_equiv_fun.s
 rfl
 
 end table_fun
+
+open_locale complexity_class
+variables {C : complexity_class} {α : Type} {β γ : α → Type} [tencodable α]
+  [∀ i, tencodable (β i)] [∀ i, tencodable (γ i)] [∀ i, decidable_eq (β i)] [∀ i, fintype (β i)]
+
+lemma to_finmap_iff {f : ∀ x, (β x) [→] (γ x)} : 
+  f ∈ₐ C ↔ (λ x, (f x).to_finmap) ∈ₐ C := iff.rfl
+
+@[complexity] lemma to_finmap {f : ∀ x, (β x) [→] (γ x)} (hf : f ∈ₐ C) : (λ x, (f x).to_finmap) ∈ₐ C := hf
 
 end complexity_class
