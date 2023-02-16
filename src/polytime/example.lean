@@ -1,4 +1,4 @@
-import polytime.lemmas
+import polytime.data_structures.list
 
 variables {α β γ : Type} [tencodable α] [tencodable β] [tencodable γ]
 open_locale complexity_class
