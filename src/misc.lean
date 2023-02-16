@@ -2,6 +2,7 @@ import data.list.basic
 import data.polynomial.eval
 import data.mv_polynomial.basic
 import order.compare
+import data.finmap
 import tree
 
 namespace list
@@ -272,3 +273,58 @@ instance [linear_order α] : decidable_rel ((<) : tree α → tree α → Prop) 
 has_lt.lt.decidable
 
 end tree
+
+namespace multiset
+
+lemma nodupkeys_iff {α : Type*} {β : α → Type*} {s : multiset (sigma β)} :
+  s.nodupkeys ↔ s.keys.nodup := quotient.induction_on s $ λ l, iff.rfl
+
+
+end multiset
+
+namespace finmap
+
+variables {α : Type*} {β : α → Type*}
+
+lemma keysnodup (f : finmap β) : f.entries.keys.nodup := multiset.nodupkeys_iff.mp f.nodupkeys
+
+def of_fun [fintype α] (f : Π x, β x) :
+  finmap β :=
+{ entries := finset.univ.val.map (λ x : α, ⟨x, f x⟩),
+  nodupkeys := by simpa [multiset.nodupkeys_iff, multiset.keys] using finset.univ.nodup }
+
+lemma mem_lookup_iff [decidable_eq α] {f : finmap β} {x : α} (y : β x) :
+   f.lookup x = some y ↔ (⟨x, y⟩ : sigma β) ∈ f.entries :=
+induction_on f (λ a, alist.mem_lookup_iff) 
+
+@[simp] lemma of_fun_lookup [fintype α] [decidable_eq α] {f : Π x, β x} (x : α) :
+  (of_fun f).lookup x = some (f x) :=
+by { rw mem_lookup_iff, exact multiset.mem_map_of_mem _ (finset.mem_univ_val x), }
+
+def comap {α β γ : Type*} (m : @finmap α (λ _, β)) (f : α ↪ γ) : @finmap γ (λ _, β) :=
+{ entries := m.entries.map (λ x, ⟨f x.1, x.2⟩),
+  nodupkeys := multiset.nodupkeys_iff.mpr (by simpa [multiset.keys] using m.keysnodup.map f.2) }
+
+def disj_union {α β γ : Type*} (m₁ : @finmap α (λ _, γ)) (m₂ : @finmap β (λ _, γ)) : @finmap (α ⊕ β) (λ _, γ) :=
+{ entries := m₁.entries.map (λ x, ⟨sum.inl x.1, x.2⟩) + m₂.entries.map (λ x, ⟨sum.inr x.1, x.2⟩),
+  nodupkeys := begin
+    rw [multiset.nodupkeys_iff, multiset.keys, multiset.map_add, multiset.nodup_add],
+    refine ⟨_, _, _⟩,
+    { simpa [multiset.keys] using m₁.keysnodup.map sum.inl_injective, },
+    { simpa [multiset.keys] using m₂.keysnodup.map sum.inr_injective, },
+    { simp [multiset.disjoint], }
+  end }
+
+@[simp] lemma disj_union_lookup_left {α β γ : Type*} [decidable_eq α] [decidable_eq β] (m₁ : @finmap α (λ _, γ)) (m₂ : @finmap β (λ _, γ)) (x : α) :
+  (m₁.disj_union m₂).lookup (sum.inl x) = m₁.lookup x :=
+by { ext y, simp [finmap.mem_lookup_iff, finmap.disj_union], }
+
+@[simp] lemma disj_union_lookup_right {α β γ : Type*} [decidable_eq α] [decidable_eq β] (m₁ : @finmap α (λ _, γ)) (m₂ : @finmap β (λ _, γ)) (x : β) :
+  (m₁.disj_union m₂).lookup (sum.inr x) = m₂.lookup x :=
+by { ext y, simp [finmap.mem_lookup_iff, finmap.disj_union], }
+
+def map {γ : α → Type*} (m : finmap β) (f : ∀ x, β x → γ x) : finmap γ :=
+{ entries := m.entries.map (λ x, ⟨x.1, f x.1 x.2⟩),
+  nodupkeys := by simpa [multiset.nodupkeys_iff, multiset.keys] using m.keysnodup }
+
+end finmap

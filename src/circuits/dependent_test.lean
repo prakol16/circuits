@@ -79,8 +79,6 @@ lemma mem_iff_comp_list_encode_dep {f : ∀ x, list (β x)} :
   f ∈ₐ C ↔ (λ x, (f x).map encode) ∈ₑ C :=
 by { rw [mem_iff_comp_encode, mem_iff_comp_encode_dep], simp only [list.encode_map_encode], }
 
-lemma _root_.tencodable.encode_sigma (x : α) (y : β x) : encode (⟨x, y⟩ : sigma β) = (encode x) △ (encode y) := rfl
-
 end complexity_class
 
 /-- A function which is encoded as a table -/

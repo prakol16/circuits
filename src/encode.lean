@@ -97,6 +97,8 @@ instance _root_.prod.tencodable : tencodable (α × β) :=
 
 lemma encode_prod (x : α) (y : β) : encode (x, y) = (encode x) △ (encode y) := rfl
 
+lemma encode_sigma {β : α → Type*} [∀ i, tencodable (β i)] (x : α) (y : β x) : encode (⟨x, y⟩ : sigma β) = (encode x) △ (encode y) := rfl
+
 end prod
 
 section bool
