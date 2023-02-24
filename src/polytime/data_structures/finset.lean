@@ -23,4 +23,6 @@ instance {α : Type} [polycodable α] : polycodable (multiset α) :=
 instance {α : Type} [decidable_eq α] [polycodable α] : polycodable (finset α) :=
 ⟨complexity_class.decodable_of_equiv $ complexity_class.subtype_decode (polycodable.poly _) multiset_nodup⟩
 
+
+
 end polytime

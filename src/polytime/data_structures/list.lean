@@ -1,4 +1,5 @@
 import polytime.lemmas
+import complexity_class.dependent
 
 namespace polytime
 
@@ -221,5 +222,15 @@ by { dunfold list.nodup, complexity, }
 
 @[complexity] lemma list_nth {α : Type} [tencodable α] : @list.nth α ∈ₑ PTIME :=
 by { complexity using λ l n, (l.drop n).head', rw [← list.nth_zero, list.nth_drop], refl, }
+
+section dep
+open_locale tree
+variables {σ τ : α → Type} [∀ i, tencodable (σ i)] [∀ i, tencodable (τ i)]
+
+lemma list_map_dep {f : ∀ x, list (σ x)} {g : ∀ x, σ x → τ x} (hf : f ∈ₐ PTIME) (hg : g ∈ₐ PTIME) :
+  (λ x, @list.map _ (τ x) (g x) (f x)) ∈ₐ PTIME :=
+polytime.functor_map_dep list hf hg (@list_map _ _ _ _ _ _) 
+
+end dep
 
 end polytime

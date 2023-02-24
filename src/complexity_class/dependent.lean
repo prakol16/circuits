@@ -1,4 +1,6 @@
 import complexity_class.lemmas
+import data.multiset.functor
+import data.finset.functor
 
 namespace function
 /- Note that Lean fails to infer something like
@@ -64,9 +66,89 @@ lemma mem_dep_iff_comp_eq_encode {f : ∀ x, β x} (g : ∀ x, β x → α₁)
   f ∈ₐ C ↔ (λ x, g x (f x)) ∈ₑ C :=
 by { rw [mem_iff_comp_encode, mem_iff_comp_encode_dep], simp only [hg], }
 
-lemma mem_iff_comp_list_map_dep {f : ∀ x, list (β x)} :
-  f ∈ₐ C ↔ (λ x, (f x).map encode) ∈ₑ C :=
-C.mem_dep_iff_comp_eq_encode (λ x (y : list (β x)), y.map encode) (λ x y, by simp only [encode, list.map_id])
+section functor
+
+class is_encodable_functor (F : Type → Type) [functor F] :=
+(inst : ∀ x, tencodable x → tencodable (F x))
+(map_encode : ∀ {α} [I : tencodable α] (x : F α), (@encode _ (inst _ infer_instance) $ @encode _ I <$> x) = @encode _ (inst _ I) x)
+
+instance : is_encodable_functor list :=
+⟨@list.tencodable, λ α _ x, by simp [encode]⟩
+
+lemma list_map_encode (x : list α) : encode (x.map encode) = encode x := is_encodable_functor.map_encode x
+
+instance : is_encodable_functor option :=
+⟨@option.tencodable, λ α _ x, by cases x; simp [encode]⟩
+
+lemma option_map_encode (x : option α) : encode (x.map encode) = encode x := is_encodable_functor.map_encode x
+
+lemma _root_.list.sorted_map {α β : Type*} {r : β → β → Prop} (f : α → β) {l : list α} :
+  (l.map f).sorted r ↔ l.sorted (λ x y, r (f x) (f y)) := list.pairwise_map f
+
+lemma _root_.list.map_merge_sort {α β : Type*} (r : β → β → Prop) [decidable_rel r]
+  [is_total β r] [is_trans β r] [is_antisymm β r] (f : α → β) (l : list α)  :
+  (l.map f).merge_sort r = (l.merge_sort (λ x y, r (f x) (f y))).map f :=
+begin
+  refine list.eq_of_perm_of_sorted (trans ((l.map f).perm_merge_sort r) ((l.perm_merge_sort (λ x y, r (f x) (f y))).map f).symm)
+    (list.sorted_merge_sort _ _) ((list.sorted_map f).mpr $ _),
+  refine @list.sorted_merge_sort _ _ _ ⟨_⟩ ⟨_⟩ _,
+  { intros a b, exact is_total.total (f a) (f b), },
+  { intros a b c, exact is_trans.trans (f a) (f b) (f c), }
+end
+
+instance : is_encodable_functor multiset :=
+⟨@multiset.tencodable, λ α _ x, quotient.induction_on x $ λ x, begin
+  dsimp [encode_multiset, lift_le],
+  rw [← @list_map_encode α, list.map_merge_sort],
+end⟩
+
+lemma multiset_map_encode (x : multiset α) : encode (x.map encode) = encode x := is_encodable_functor.map_encode x
+
+section
+open_locale classical
+
+lemma _root_.finset.fmap_def' {α β : Type*} [decidable_eq β] (f : α → β) (x : finset α) :
+  f <$> x = x.image f := by { dsimp, congr, }
+
+noncomputable instance : is_encodable_functor finset :=
+⟨λ α I, @finset.tencodable _ I _, λ α _ x, begin
+  resetI,
+  simp only [finset.fmap_def'],
+  rw (show x.image encode = _, from (finset.map_eq_image ⟨encode, encode_injective⟩ x).symm),
+  cases x with v hv,
+  simp only [finset.map, encode_finset],
+  exact multiset_map_encode _,
+end⟩
+
+lemma finset_image_encode [decidable_eq α] (x : finset α) : encode (x.image encode) = encode x := by convert is_encodable_functor.map_encode x
+
+end
+
+lemma functor_map_dep (F : Type → Type) [functor F] [is_lawful_functor F] [is_encodable_functor F]
+  {l : ∀ x, F (β x)} {g : ∀ x, β x → γ x} (hl : by { haveI : ∀ x, tencodable (F (β x)) := λ x, is_encodable_functor.inst _ infer_instance, exact l ∈ₐ C, })
+  (hg : g ∈ₐ C) (hm : by { haveI : tencodable (F (tree unit)) := is_encodable_functor.inst _ infer_instance,
+    exact ∀ {l' : α → F (tree unit)} {g' : α → tree unit → tree unit}, l' ∈ₑ C → g' ∈ₑ C → (λ z, (g' z) <$> (l' z)) ∈ₑ C, }) :
+  by { haveI : ∀ x, tencodable (F (γ x)) := λ x, is_encodable_functor.inst _ infer_instance, exact (λ x, (g x) <$> (l x)) ∈ₐ C } :=
+begin
+  letI : ∀ x, tencodable (F (β x)) := λ x, is_encodable_functor.inst _ infer_instance,
+  letI : tencodable (F (tree unit)) := is_encodable_functor.inst _ infer_instance,
+  letI : ∀ x, tencodable (F (γ x)) := λ x, is_encodable_functor.inst _ infer_instance,
+  rcases hg with ⟨g', pg, hg⟩,
+  simp only [sigma.forall] at hg,
+  dsimp [encode_sigma, has_uncurry_dep.uncurry, has_uncurry_dep_aux.uncurry] at hg,
+  rw C.mem_dep_iff_comp_eq_encode (λ x (y : F (γ x)), encode <$> y) (λ x y, is_encodable_functor.map_encode y),
+  rw C.mem_dep_iff_comp_eq_encode (λ x (y : F (β x)), encode <$> y) (λ x y, is_encodable_functor.map_encode y) at hl,
+  have pg' : (λ (x : α) (t : tree unit), g' (tree.node () (encode x) t)) ∈ₑ C := by complexity,
+  convert hm hl pg',
+  funext x,
+  simp [functor.map_map, function.comp, hg],
+end
+
+end functor
+
+-- lemma mem_iff_comp_list_map_dep {f : ∀ x, list (β x)} :
+--   f ∈ₐ C ↔ (λ x, (f x).map encode) ∈ₑ C :=
+-- C.mem_dep_iff_comp_eq_encode (λ x (y : list (β x)), y.map encode) (λ (x : α) y, list_map_encode y)
 
 end dep
 

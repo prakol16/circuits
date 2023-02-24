@@ -284,12 +284,22 @@ instance : is_linear_order α lift_le :=
 instance : tencodable (multiset α) :=
 (list.is_setoid α).tencodable (multiset.sort lift_le) (multiset.sort_eq _)
 
+lemma encode_multiset (x : multiset α) : encode x = encode (x.sort lift_le) := rfl
+lemma decode_multiset (x : tree unit) : decode (multiset α) x = (decode (list α) x).map quotient.mk := rfl
+
 instance [decidable_eq α] : tencodable (finset α) :=
 of_equiv {val : multiset α // val.nodup}
 { to_fun := λ x, ⟨x.1, x.2⟩,
   inv_fun := λ x, ⟨x.1, x.2⟩,
   left_inv := λ ⟨x, h⟩, rfl,
   right_inv := λ ⟨x, h⟩, rfl }
+
+lemma encode_finset [decidable_eq α] (x : finset α) : encode x = encode x.val := rfl
+lemma decode_finset' [decidable_eq α] (x : tree unit) : decode (finset α) x = 
+  ((decode (multiset α) x).bind $ λ y, if h : y.nodup then some (subtype.mk y h) else none).bind (λ y, some ⟨y.1, y.2⟩) := rfl
+lemma decode_finset [decidable_eq α] (x : tree unit) : decode (finset α) x = 
+  ((decode (multiset α) x).bind $ λ y, if h : y.nodup then some ⟨y, h⟩ else none) :=
+by { rw decode_finset', rw [← option.map, option.map_bind'], simp [apply_dite (option.map _)], }
 
 end finset
 
