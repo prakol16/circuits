@@ -195,8 +195,7 @@ variables [tencodable α] [fintype α] [decidable_eq α] [tencodable β] [tencod
 instance : tencodable (α [→] β) :=
 tencodable.of_equiv _ (equiv_fun.trans finmap_equiv_fun.symm)
 
-lemma encode_table_fun (f : α [→] β) : encode f = encode (finmap_equiv_fun.symm ⇑f) :=
-rfl
+lemma encode_table_fun (f : α [→] β) : encode f = encode f.to_finmap := rfl
 
 end table_fun
 
